@@ -198,27 +198,17 @@
     </div>
 
     <!-- Firebase SDK -->
+    <script src="/__/firebase/9.6.1/firebase-app-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/9.6.1/firebase-functions-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-        import { getFirestore, collection, query, orderBy, limit, onSnapshot, serverTimestamp, getDoc, doc, setDoc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-functions.js";
-        
-        const firebaseConfig = {
-           // 여기에 진규님의 Firebase 설정 정보를 붙여넣어 주세요.
-            apiKey: "AIzaSyDksJuiNQtvrxzjV_8TjCtekw_-ebCkMzU",
-            authDomain: "sundanbi-game.firebaseapp.com",
-            projectId: "sundanbi-game",
-            storageBucket: "sundanbi-game.firebasestorage.app",
-            messagingSenderId: "154308026817",
-            appId: "1:154308026817:web:6be4949dca4fc537584f40"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const functions = getFunctions(app, 'us-central1');
-        const isNicknameAvailable = httpsCallable(functions, 'isNicknameAvailable');
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const functions = firebase.functions('us-central1');
+        const { httpsCallable } = firebase.functions();
+        const isNicknameAvailable = httpsCallable('isNicknameAvailable');
 
         const ui = {
             screens: {
@@ -435,15 +425,15 @@
                 switchScreen('end');
                 return;
             }
-            const userScoreRef = doc(db, "scores", user.uid);
+            const userScoreRef = db.collection("scores").doc(user.uid);
             try {
-                const docSnap = await getDoc(userScoreRef);
+                const docSnap = await userScoreRef.get();
                 if (docSnap.exists()) {
                     const existingData = docSnap.data();
                     const isNewHighScore = score > (existingData.score || 0) || 
                                          (score === existingData.score && elapsedTime < (existingData.elapsedTime || Infinity));
                     if (isNewHighScore) {
-                        await updateDoc(userScoreRef, {
+                        await userScoreRef.update({
                             score: score,
                             elapsedTime: elapsedTime,
                             name: nickname,
@@ -451,7 +441,7 @@
                         });
                     }
                 } else {
-                    await setDoc(userScoreRef, {
+                    await userScoreRef.set({
                         uid: user.uid,
                         name: nickname,
                         score: score,
@@ -481,7 +471,7 @@
             ui.submitEmailBtn.textContent = '제출 중...';
             try {
                 const user = auth.currentUser;
-                await addDoc(collection(db, "emails"), {
+                await db.collection("emails").add({
                     uid: user ? user.uid : 'anonymous',
                     name: nickname,
                     email: email,
@@ -525,7 +515,7 @@
         
         function subscribeToLeaderboard() {
             const q = query(collection(db, "scores"), orderBy("score", "desc"), orderBy("elapsedTime", "asc"), limit(10));
-            onSnapshot(q, (querySnapshot) => {
+            q.onSnapshot((querySnapshot) => {
                 const scores = [];
                 querySnapshot.forEach((doc) => { scores.push(doc.data()); });
                 displayLeaderboard(scores);
@@ -549,21 +539,35 @@
             ui.shareModal.backdrop.style.display = 'none';
         }
 
-        function shareToKakao() {
-            if (!Kakao.isInitialized()) {
-                Kakao.init('3b220ecf82039d6604c6a42308e4dd1a'); // 여기에 카카오 JavaScript 키를 입력하세요.
-            }
-            Kakao.Share.sendDefault({
-                objectType: 'feed',
-                content: {
-                    title: '수단비 단어 챌린지',
-                    description: `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`,
-                    imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png',
-                    link: { mobileWebUrl: window.location.href, webUrl: window.location.href, },
-                },
-                buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}],
-            });
+        const getKakaoKey = httpsCallable(functions, 'getKakaoKey');
+
+async function shareToKakao() { // 'async' 키워드가 붙어 비동기 함수가 됩니다.
+    if (!Kakao.isInitialized()) {
+        try {
+            // 'getKakaoKey' 심부름꾼을 호출해서 키를 받아옵니다.
+            console.log('카카오 키를 요청합니다...');
+            const result = await getKakaoKey();
+            const kakaoKey = result.data.key;
+            Kakao.init(kakaoKey); // 받아온 비밀 키로 초기화!
+            console.log('카카오 SDK 초기화 성공!');
+        } catch (error) {
+            console.error("카카오 키를 가져오는 데 실패했습니다:", error);
+            showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.');
+            return; // 실패하면 공유를 중단합니다.
         }
+    }
+
+    Kakao.Share.sendDefault({
+        objectType: 'feed',
+        content: {
+            title: '수단비 단어 챌린지',
+            description: `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`,
+            imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png',
+            link: { mobileWebUrl: window.location.href, webUrl: window.location.href, },
+        },
+        buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}],
+    });
+}
         
         function checkStoredNickname() {
             const storedNickname = localStorage.getItem('sudanbiNickname');

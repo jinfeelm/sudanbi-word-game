@@ -21,4 +21,11 @@ exports.isNicknameAvailable = functions.https.onCall(async (data, context) => {
   } else {
     return {isAvailable: false};
   }
+  // 이 코드를 functions/index.js 파일 맨 아래에 추가하세요.
+exports.getKakaoKey = functions.https.onCall((data, context) => {
+  // Firebase 비밀 금고에 접근해서...
+  const kakaoKey = functions.config().kakao.key;
+  // ...보관해둔 카카오 키를 꺼내서 요청한 사람에게만 돌려줍니다.
+  return { key: kakaoKey };
+});
 });
