@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 'scores' 컬렉션에 대한 규칙
+    // {userId}는 접속한 유저의 고유 ID(uid)를 의미합니다.
+    match /scores/{userId} {
+      // 랭킹을 보여줘야 하니 '읽기(read)'는 누구나 가능하게 허용합니다.
+      allow read;
+
+      // '쓰기(write)'는 자기 자신의 문서(userId)에만 가능하게 합니다.
+      // 즉, 다른 사람의 점수를 절대 수정할 수 없습니다.
+      allow write: if request.auth.uid == userId;
+    }
+
+    // 'emails' 컬렉션에 대한 규칙
+    match /emails/{emailId} {
+      // 이메일은 한번 제출하면 끝! 아무도 읽거나 수정/삭제할 수 없게 막습니다.
+      allow read, update, delete: if false;
+
+      // '생성(create)'은 로그인한 사용자라면 누구나 가능하게 허용합니다.
+      allow create: if request.auth != null;
+    }
+  }
+}
