@@ -38,28 +38,18 @@ exports.isNicknameAvailable = onCall(
  * 카카오 공유 기능을 위한 JavaScript 키를 반환하는 함수입니다. (v2 방식으로 수정)
  */
 exports.getKakaoKey = onCall(
-  // 함수 설정 객체에 직접 지역을 지정합니다.
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", secrets: ["KAKAO_KEY"] }, // secrets를 사용하면 더 안전하고 효율적입니다.
   (request) => {
-    // Firebase 환경 변수에서 카카오 키를 가져옵니다.
-    // v2에서는 functions.config() 대신 process.env를 사용할 수 있습니다.
-    // 터미널에서 `firebase functions:config:set kakao.key="..."` 설정 후 배포해야 합니다.
     const kakaoKey = process.env.KAKAO_KEY;
 
-    // 키가 설정되지 않은 경우 오류를 반환합니다.
     if (!kakaoKey) {
-        // config()를 fallback으로 한번 더 확인합니다.
-        const functions = require("firebase-functions");
-        const fallbackKey = functions.config().kakao?.key;
-        if (!fallbackKey) {
-            throw new HttpsError(
-                "not-found",
-                "카카오 키가 Firebase 설정에 없습니다. 관리자에게 문의하세요."
-            );
-        }
-        return { key: fallbackKey };
+      console.error("KAKAO_KEY secret is not set.");
+      throw new HttpsError(
+        "not-found",
+        "카카오 키가 설정되지 않았습니다. 관리자에게 문의하세요."
+      );
     }
-
+    
     return { key: kakaoKey };
   }
 );

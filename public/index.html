@@ -202,7 +202,8 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         const app = firebase.app();
-        const functions = firebase.functions(app, 'asia-northeast3');
+        // ✅ 이 부분이 v8 호환 라이브러리의 올바른 문법입니다.
+        const functions = app.functions('asia-northeast3');  
 
         const isNicknameAvailable = functions.httpsCallable('isNicknameAvailable');
         const getKakaoKey = functions.httpsCallable('getKakaoKey');
