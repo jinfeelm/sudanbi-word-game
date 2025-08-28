@@ -206,7 +206,8 @@
     <script type="module">
 const auth = firebase.auth();
 const db = firebase.firestore();
-const functions = firebase.functions('us-central1');
+// ✅ Functions 호출 지역을 'asia-northeast3'으로 수정했습니다.
+const functions = firebase.functions('asia-northeast3');
 
 // '비밀 심부름꾼'들을 부를 준비
 const isNicknameAvailable = functions.httpsCallable('isNicknameAvailable');
@@ -319,9 +320,9 @@ async function getWordsForCurrentWeek() {
     const currentWeek = 1;
     const weekKey = `Week ${currentWeek}`;
     try {
-        const seasonDocRef = db.collection("seasons").doc("season1"); // 수정한 부분
-        const seasonDoc = await seasonDocRef.get(); // 수정한 부분
-        if (seasonDoc.exists) { // .exists() 대신 .exists
+        const seasonDocRef = db.collection("seasons").doc("season1");
+        const seasonDoc = await seasonDocRef.get();
+        if (seasonDoc.exists) {
             const allWeeksData = seasonDoc.data();
             const wordData = allWeeksData[weekKey];
             if (wordData && wordData.length > 0) return wordData;
@@ -407,27 +408,27 @@ async function endGame() {
         switchScreen('end');
         return;
     }
-    const userScoreRef = db.collection("scores").doc(user.uid); // 수정한 부분
+    const userScoreRef = db.collection("scores").doc(user.uid);
     try {
-        const docSnap = await userScoreRef.get(); // 수정한 부분
-        if (docSnap.exists) { // .exists() 대신 .exists
+        const docSnap = await userScoreRef.get();
+        if (docSnap.exists) {
             const existingData = docSnap.data();
             const isNewHighScore = score > (existingData.score || 0) || (score === existingData.score && elapsedTime < (existingData.elapsedTime || Infinity));
             if (isNewHighScore) {
-                await userScoreRef.update({ // 수정한 부분
+                await userScoreRef.update({
                     score: score,
                     elapsedTime: elapsedTime,
                     name: nickname,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             }
         } else {
-            await userScoreRef.set({ // 수정한 부분
+            await userScoreRef.set({
                 uid: user.uid,
                 name: nickname,
                 score: score,
                 elapsedTime: elapsedTime,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         }
     } catch (error) {
@@ -452,12 +453,12 @@ async function submitEmail() {
     ui.submitEmailBtn.textContent = '제출 중...';
     try {
         const user = auth.currentUser;
-        await db.collection("emails").add({ // 수정한 부분
+        await db.collection("emails").add({
             uid: user ? user.uid : 'anonymous',
             name: nickname,
             email: email,
             score: score,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         showCustomAlert('이벤트 참여가 완료되었습니다!');
         ui.emailInput.value = '';
@@ -495,8 +496,8 @@ function displayLeaderboard(scores) {
 }
 
 function subscribeToLeaderboard() {
-    const q = db.collection("scores").orderBy("score", "desc").orderBy("elapsedTime", "asc").limit(10); // 수정한 부분
-    q.onSnapshot((querySnapshot) => { // 수정한 부분
+    const q = db.collection("scores").orderBy("score", "desc").orderBy("elapsedTime", "asc").limit(10);
+    q.onSnapshot((querySnapshot) => {
         const scores = [];
         querySnapshot.forEach((doc) => { scores.push(doc.data()); });
         displayLeaderboard(scores);
@@ -571,17 +572,16 @@ ui.shareModal.copyLinkBtn.addEventListener('click', () => {
     });
 });
 
-auth.onAuthStateChanged((user) => { // 수정한 부분
+auth.onAuthStateChanged((user) => {
     if (user) {
         console.log("Anonymous user signed in:", user.uid);
         setChallengeWeekInfo();
         subscribeToLeaderboard();
         checkStoredNickname();
     } else {
-        auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error)); // 수정한 부분
+        auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error));
     }
 });
-
-    </script>
+</script>
 </body>
 </html>
