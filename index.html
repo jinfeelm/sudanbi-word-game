@@ -204,414 +204,383 @@
     <script src="/__/firebase/9.6.1/firebase-functions-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
     <script type="module">
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const functions = firebase.functions('us-central1');
-        const { httpsCallable } = firebase.functions();
-        const isNicknameAvailable = httpsCallable('isNicknameAvailable');
+const auth = firebase.auth();
+const db = firebase.firestore();
+const functions = firebase.functions('us-central1');
 
-        const ui = {
-            screens: {
-                start: document.getElementById('start-screen'),
-                game: document.getElementById('game-screen'),
-                end: document.getElementById('end-screen'),
-            },
-            startBtn: document.getElementById('start-btn'),
-            startNicknameInput: document.getElementById('start-nickname-input'),
-            nicknameContainer: document.getElementById('nickname-container'),
-            nicknameLabel: document.getElementById('nickname-label'),
-            scoreEl: document.getElementById('score'),
-            timerEl: document.getElementById('timer'),
-            progressBar: document.getElementById('progress-bar'),
-            wordEl: document.getElementById('word'),
-            optionsEl: document.getElementById('options'),
-            freqInfoContainer: document.getElementById('freq-info-container'),
-            finalScoreEl: document.getElementById('final-score'),
-            emailInput: document.getElementById('email-input'),
-            submitEmailBtn: document.getElementById('submit-email-btn'),
-            shareBtn: document.getElementById('share-btn'),
-            restartBtn: document.getElementById('restart-btn'),
-            leaderboardList: document.getElementById('leaderboard-list'),
-            challengeWeekInfoEl: document.getElementById('challenge-week-info'),
-            shareModal: {
-                backdrop: document.getElementById('share-modal-backdrop'),
-                modal: document.getElementById('share-modal'),
-                closeBtn: document.getElementById('close-share-modal-btn'),
-                kakaoBtn: document.getElementById('kakao-share-btn'),
-                copyLinkBtn: document.getElementById('copy-link-btn'),
-            },
-            alertModal: {
-                backdrop: document.getElementById('alert-modal-backdrop'),
-                modal: document.getElementById('alert-modal'),
-                message: document.getElementById('alert-modal-message'),
-                closeBtn: document.getElementById('close-alert-modal-btn'),
-            }
-        };
+// '비밀 심부름꾼'들을 부를 준비
+const isNicknameAvailable = functions.httpsCallable('isNicknameAvailable');
+const getKakaoKey = functions.httpsCallable('getKakaoKey');
 
-        let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime;
-        let shuffledWords = [];
-        let isAnswerable = true;
+// UI 요소들은 그대로
+const ui = {
+    screens: { start: document.getElementById('start-screen'), game: document.getElementById('game-screen'), end: document.getElementById('end-screen') },
+    startBtn: document.getElementById('start-btn'),
+    startNicknameInput: document.getElementById('start-nickname-input'),
+    nicknameContainer: document.getElementById('nickname-container'),
+    nicknameLabel: document.getElementById('nickname-label'),
+    scoreEl: document.getElementById('score'),
+    timerEl: document.getElementById('timer'),
+    progressBar: document.getElementById('progress-bar'),
+    wordEl: document.getElementById('word'),
+    optionsEl: document.getElementById('options'),
+    freqInfoContainer: document.getElementById('freq-info-container'),
+    finalScoreEl: document.getElementById('final-score'),
+    emailInput: document.getElementById('email-input'),
+    submitEmailBtn: document.getElementById('submit-email-btn'),
+    shareBtn: document.getElementById('share-btn'),
+    restartBtn: document.getElementById('restart-btn'),
+    leaderboardList: document.getElementById('leaderboard-list'),
+    challengeWeekInfoEl: document.getElementById('challenge-week-info'),
+    shareModal: { backdrop: document.getElementById('share-modal-backdrop'), modal: document.getElementById('share-modal'), closeBtn: document.getElementById('close-share-modal-btn'), kakaoBtn: document.getElementById('kakao-share-btn'), copyLinkBtn: document.getElementById('copy-link-btn') },
+    alertModal: { backdrop: document.getElementById('alert-modal-backdrop'), modal: document.getElementById('alert-modal'), message: document.getElementById('alert-modal-message'), closeBtn: document.getElementById('close-alert-modal-btn') }
+};
 
-        function showCustomAlert(message) {
-            ui.alertModal.message.textContent = message;
-            ui.alertModal.modal.style.display = 'block';
-            ui.alertModal.backdrop.style.display = 'block';
+let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime;
+let shuffledWords = [];
+let isAnswerable = true;
+
+function showCustomAlert(message) {
+    ui.alertModal.message.textContent = message;
+    ui.alertModal.modal.style.display = 'block';
+    ui.alertModal.backdrop.style.display = 'block';
+}
+
+function closeCustomAlert() {
+    ui.alertModal.modal.style.display = 'none';
+    ui.alertModal.backdrop.style.display = 'none';
+}
+
+function switchScreen(screenName) {
+    Object.values(ui.screens).forEach(screen => screen.classList.remove('active'));
+    ui.screens[screenName].classList.add('active');
+}
+
+async function initGame() {
+    nickname = ui.startNicknameInput.value.trim();
+    if (ui.startNicknameInput.disabled) {
+        // 닉네임 고정
+    } else {
+        if (nickname.length < 2 || nickname.length > 10) {
+            showCustomAlert('닉네임은 2자 이상 10자 이하로 입력해주세요!');
+            return;
         }
-
-        function closeCustomAlert() {
-            ui.alertModal.modal.style.display = 'none';
-            ui.alertModal.backdrop.style.display = 'none';
-        }
-
-        function switchScreen(screenName) {
-            Object.values(ui.screens).forEach(screen => screen.classList.remove('active'));
-            ui.screens[screenName].classList.add('active');
-        }
-        
-        async function initGame() {
-            nickname = ui.startNicknameInput.value.trim();
-            if (ui.startNicknameInput.disabled) {
-                // 이미 닉네임이 설정된 경우, 바로 게임 데이터 로딩
-            } else {
-                 // 처음 플레이하는 경우, 유효성 검사 및 중복 확인
-                if (nickname.length < 2 || nickname.length > 10) {
-                    showCustomAlert('닉네임은 2자 이상 10자 이하로 입력해주세요!');
-                    return;
-                }
-
-                ui.startBtn.disabled = true;
-                ui.startBtn.textContent = '닉네임 확인 중...';
-
-                try {
-                    const result = await isNicknameAvailable({ nickname: nickname });
-                    if (!result.data.isAvailable) {
-                        showCustomAlert('이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해주세요!');
-                        ui.startBtn.disabled = false;
-                        ui.startBtn.textContent = '도전 시작!';
-                        return;
-                    }
-                    localStorage.setItem('sudanbiNickname', nickname);
-                } catch (error) {
-                    console.error("닉네임 확인 오류:", error);
-                    showCustomAlert(error.message || '닉네임 확인 중 오류가 발생했습니다.');
-                    ui.startBtn.disabled = false;
-                    ui.startBtn.textContent = '도전 시작!';
-                    return;
-                }
-            }
-            
-            ui.startBtn.disabled = true;
-            ui.startBtn.textContent = '문제 로딩 중...';
-
-            try {
-                const wordsForThisWeek = await getWordsForCurrentWeek();
-                
-                if (!wordsForThisWeek || wordsForThisWeek.length === 0) {
-                    showCustomAlert('이번주 챌린지 단어가 없습니다. 관리자에게 문의해주세요.');
-                    ui.startBtn.disabled = false;
-                    ui.startBtn.textContent = '도전 시작!';
-                    return;
-                }
-                
-                score = 0;
-                timer = 30;
-                currentWordIndex = 0;
-                ui.scoreEl.textContent = score;
-                ui.timerEl.textContent = timer;
-                shuffledWords = [...wordsForThisWeek].sort(() => 0.5 - Math.random());
-                gameStartTime = Date.now();
-
-                switchScreen('game');
-                loadNextWord();
-                startTimer();
-            } catch (error) {
-                console.error("게임 시작 오류:", error);
-                showCustomAlert(error.message || '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-            } finally {
+        ui.startBtn.disabled = true;
+        ui.startBtn.textContent = '닉네임 확인 중...';
+        try {
+            const result = await isNicknameAvailable({ nickname: nickname });
+            if (!result.data.isAvailable) {
+                showCustomAlert('이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해주세요!');
                 ui.startBtn.disabled = false;
                 ui.startBtn.textContent = '도전 시작!';
-            }
-        }
-
-        async function getWordsForCurrentWeek() {
-            const currentWeek = 1; 
-            const weekKey = `Week ${currentWeek}`;
-            try {
-                const seasonDocRef = doc(db, "seasons", "season1");
-                const seasonDoc = await getDoc(seasonDocRef);
-                if (seasonDoc.exists()) {
-                    const allWeeksData = seasonDoc.data();
-                    const wordData = allWeeksData[weekKey];
-                    if (wordData && wordData.length > 0) return wordData;
-                    return allWeeksData['Week 1'] || []; 
-                }
-                console.warn("Season 1 document does not exist.");
-                return [];
-            } catch (error) {
-                console.error("Error getting words: ", error);
-                throw new Error("단어 목록을 불러오는 데 실패했습니다.");
-            }
-        }
-
-        function startTimer() {
-            ui.progressBar.style.width = '100%';
-            ui.progressBar.style.transition = `width ${timer}s linear`;
-            requestAnimationFrame(() => { ui.progressBar.style.width = '0%'; });
-            timerInterval = setInterval(() => {
-                timer--;
-                ui.timerEl.textContent = timer;
-                if (timer <= 0) {
-                    endGame();
-                }
-            }, 1000);
-        }
-
-        function loadNextWord() {
-            isAnswerable = true;
-            ui.freqInfoContainer.innerHTML = '';
-            if (currentWordIndex >= shuffledWords.length) {
-                currentWordIndex = 0;
-                shuffledWords.sort(() => 0.5 - Math.random());
-            }
-            const currentWord = shuffledWords[currentWordIndex];
-            ui.wordEl.textContent = currentWord.단어;
-            ui.optionsEl.innerHTML = '';
-            const options = [currentWord.정답, currentWord.오답1, currentWord.오답2, currentWord.오답3];
-            options.sort(() => 0.5 - Math.random()).forEach(option => {
-                const button = document.createElement('button');
-                button.textContent = option;
-                button.className = 'w-full p-4 border-2 border-slate-200 rounded-lg text-lg transition duration-200 option-btn';
-                button.onclick = () => handleAnswer(button, option, currentWord.정답, currentWord.역대_빈도);
-                ui.optionsEl.appendChild(button);
-            });
-            currentWordIndex++;
-        }
-
-        function handleAnswer(button, selectedOption, correctAnswer, freqData) {
-            if (!isAnswerable) return;
-            isAnswerable = false;
-            if (selectedOption === correctAnswer) {
-                score += 10;
-                ui.scoreEl.textContent = score;
-                button.classList.add('correct');
-            } else {
-                button.classList.add('incorrect');
-                Array.from(ui.optionsEl.children).forEach(btn => {
-                    if (btn.textContent === correctAnswer) {
-                        btn.classList.add('correct');
-                    }
-                });
-            }
-            const freqText = `📊 역대 ${freqData}회 출제`;
-            ui.freqInfoContainer.innerHTML = `<div class="freq-info text-center bg-slate-100 p-2 rounded-md text-slate-600 font-semibold">${freqText}</div>`;
-            setTimeout(() => {
-                const freqInfoEl = ui.freqInfoContainer.querySelector('.freq-info');
-                if (freqInfoEl) freqInfoEl.classList.add('visible');
-            }, 10);
-            setTimeout(() => {
-                if (timer > 0) {
-                    loadNextWord();
-                }
-            }, 1500);
-        }
-
-        async function endGame() {
-            clearInterval(timerInterval);
-            ui.progressBar.style.transition = 'none';
-            ui.finalScoreEl.textContent = score;
-            const elapsedTime = Date.now() - gameStartTime;
-            const user = auth.currentUser;
-            if (!user) {
-                switchScreen('end');
                 return;
             }
-            const userScoreRef = db.collection("scores").doc(user.uid);
-            try {
-                const docSnap = await userScoreRef.get();
-                if (docSnap.exists()) {
-                    const existingData = docSnap.data();
-                    const isNewHighScore = score > (existingData.score || 0) || 
-                                         (score === existingData.score && elapsedTime < (existingData.elapsedTime || Infinity));
-                    if (isNewHighScore) {
-                        await userScoreRef.update({
-                            score: score,
-                            elapsedTime: elapsedTime,
-                            name: nickname,
-                            updatedAt: serverTimestamp()
-                        });
-                    }
-                } else {
-                    await userScoreRef.set({
-                        uid: user.uid,
-                        name: nickname,
-                        score: score,
-                        elapsedTime: elapsedTime,
-                        createdAt: serverTimestamp()
-                    });
-                }
-            } catch (error) {
-                console.error("Error saving score: ", error);
-                showCustomAlert('점수 저장에 실패했습니다. Firestore 보안 규칙을 확인해주세요.');
-            }
-            switchScreen('end');
-        }
-
-        async function submitEmail() {
-            const email = ui.emailInput.value.trim();
-            if (!email) {
-                showCustomAlert('이벤트에 참여하시려면 이메일을 입력해주세요!');
-                return;
-            }
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                showCustomAlert('올바른 이메일 형식을 입력해주세요.');
-                return;
-            }
-            ui.submitEmailBtn.disabled = true;
-            ui.submitEmailBtn.textContent = '제출 중...';
-            try {
-                const user = auth.currentUser;
-                await db.collection("emails").add({
-                    uid: user ? user.uid : 'anonymous',
-                    name: nickname,
-                    email: email,
-                    score: score,
-                    createdAt: serverTimestamp()
-                });
-                showCustomAlert('이벤트 참여가 완료되었습니다!');
-                ui.emailInput.value = '';
-                ui.submitEmailBtn.textContent = '제출 완료 ✅';
-            } catch (error) {
-                showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.');
-            } finally {
-                ui.submitEmailBtn.disabled = false;
-                ui.submitEmailBtn.textContent = '이메일 제출';
-            }
-        }
-
-        function displayLeaderboard(scores) {
-            ui.leaderboardList.innerHTML = '';
-            if (!scores || scores.length === 0) {
-                ui.leaderboardList.innerHTML = '<li class="text-center text-slate-400 p-4">아직 등록된 점수가 없어요.<br>첫 번째 챔피언이 되어보세요!</li>';
-                return;
-            }
-            scores.forEach((data, index) => {
-                const li = document.createElement('li');
-                li.className = 'flex items-center justify-between bg-slate-100 p-3 rounded-lg';
-                const timeDisplay = data.elapsedTime ? `<span class="text-xs text-slate-500 font-poppins">${(data.elapsedTime / 1000).toFixed(2)}초</span>` : '';
-                li.innerHTML = `
-                    <div class="flex items-center">
-                        <span class="rank font-bold text-sm bg-slate-300 text-slate-600 rounded-full w-6 h-6 flex items-center justify-center mr-3">${index + 1}</span>
-                        <span class="font-semibold text-slate-700">${data.name}</span>
-                    </div>
-                    <div class="text-right">
-                        <span class="font-bold font-poppins text-purple-600">${data.score}점</span>
-                        ${timeDisplay}
-                    </div>
-                `;
-                ui.leaderboardList.appendChild(li);
-            });
-        }
-        
-        function subscribeToLeaderboard() {
-            const q = query(collection(db, "scores"), orderBy("score", "desc"), orderBy("elapsedTime", "asc"), limit(10));
-            q.onSnapshot((querySnapshot) => {
-                const scores = [];
-                querySnapshot.forEach((doc) => { scores.push(doc.data()); });
-                displayLeaderboard(scores);
-            }, (error) => {
-                console.error("Leaderboard subscription error: ", error);
-                let message = '랭킹을 불러오는 데 실패했습니다.<br>잠시 후 다시 시도해주세요.';
-                if (error.code === 'permission-denied') {
-                    message = '랭킹을 볼 권한이 없습니다.<br>Firestore 보안 규칙을 확인해주세요.';
-                }
-                ui.leaderboardList.innerHTML = `<li class="text-center text-slate-400 p-4 text-red-500">${message}</li>`;
-            });
-        }
-        
-        function openShareModal() {
-            ui.shareModal.modal.style.display = 'block';
-            ui.shareModal.backdrop.style.display = 'block';
-        }
-
-        function closeShareModal() {
-            ui.shareModal.modal.style.display = 'none';
-            ui.shareModal.backdrop.style.display = 'none';
-        }
-
-        const getKakaoKey = httpsCallable(functions, 'getKakaoKey');
-
-async function shareToKakao() { // 'async' 키워드가 붙어 비동기 함수가 됩니다.
-    if (!Kakao.isInitialized()) {
-        try {
-            // 'getKakaoKey' 심부름꾼을 호출해서 키를 받아옵니다.
-            console.log('카카오 키를 요청합니다...');
-            const result = await getKakaoKey();
-            const kakaoKey = result.data.key;
-            Kakao.init(kakaoKey); // 받아온 비밀 키로 초기화!
-            console.log('카카오 SDK 초기화 성공!');
+            localStorage.setItem('sudanbiNickname', nickname);
         } catch (error) {
-            console.error("카카오 키를 가져오는 데 실패했습니다:", error);
-            showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.');
-            return; // 실패하면 공유를 중단합니다.
+            console.error("닉네임 확인 오류:", error);
+            showCustomAlert(error.message || '닉네임 확인 중 오류가 발생했습니다.');
+            ui.startBtn.disabled = false;
+            ui.startBtn.textContent = '도전 시작!';
+            return;
         }
     }
 
+    ui.startBtn.disabled = true;
+    ui.startBtn.textContent = '문제 로딩 중...';
+
+    try {
+        const wordsForThisWeek = await getWordsForCurrentWeek();
+        if (!wordsForThisWeek || wordsForThisWeek.length === 0) {
+            showCustomAlert('이번주 챌린지 단어가 없습니다. 관리자에게 문의해주세요.');
+            ui.startBtn.disabled = false;
+            ui.startBtn.textContent = '도전 시작!';
+            return;
+        }
+        score = 0;
+        timer = 30;
+        currentWordIndex = 0;
+        ui.scoreEl.textContent = score;
+        ui.timerEl.textContent = timer;
+        shuffledWords = [...wordsForThisWeek].sort(() => 0.5 - Math.random());
+        gameStartTime = Date.now();
+        switchScreen('game');
+        loadNextWord();
+        startTimer();
+    } catch (error) {
+        console.error("게임 시작 오류:", error);
+        showCustomAlert(error.message || '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+        ui.startBtn.disabled = false;
+        ui.startBtn.textContent = '도전 시작!';
+    }
+}
+
+async function getWordsForCurrentWeek() {
+    const currentWeek = 1;
+    const weekKey = `Week ${currentWeek}`;
+    try {
+        const seasonDocRef = db.collection("seasons").doc("season1"); // 수정한 부분
+        const seasonDoc = await seasonDocRef.get(); // 수정한 부분
+        if (seasonDoc.exists) { // .exists() 대신 .exists
+            const allWeeksData = seasonDoc.data();
+            const wordData = allWeeksData[weekKey];
+            if (wordData && wordData.length > 0) return wordData;
+            return allWeeksData['Week 1'] || [];
+        }
+        console.warn("Season 1 document does not exist.");
+        return [];
+    } catch (error) {
+        console.error("Error getting words: ", error);
+        throw new Error("단어 목록을 불러오는 데 실패했습니다.");
+    }
+}
+
+function startTimer() {
+    ui.progressBar.style.width = '100%';
+    ui.progressBar.style.transition = `width ${timer}s linear`;
+    requestAnimationFrame(() => { ui.progressBar.style.width = '0%'; });
+    timerInterval = setInterval(() => {
+        timer--;
+        ui.timerEl.textContent = timer;
+        if (timer <= 0) {
+            endGame();
+        }
+    }, 1000);
+}
+
+function loadNextWord() {
+    isAnswerable = true;
+    ui.freqInfoContainer.innerHTML = '';
+    if (currentWordIndex >= shuffledWords.length) {
+        currentWordIndex = 0;
+        shuffledWords.sort(() => 0.5 - Math.random());
+    }
+    const currentWord = shuffledWords[currentWordIndex];
+    ui.wordEl.textContent = currentWord.단어;
+    ui.optionsEl.innerHTML = '';
+    const options = [currentWord.정답, currentWord.오답1, currentWord.오답2, currentWord.오답3];
+    options.sort(() => 0.5 - Math.random()).forEach(option => {
+        const button = document.createElement('button');
+        button.textContent = option;
+        button.className = 'w-full p-4 border-2 border-slate-200 rounded-lg text-lg transition duration-200 option-btn';
+        button.onclick = () => handleAnswer(button, option, currentWord.정답, currentWord.역대_빈도);
+        ui.optionsEl.appendChild(button);
+    });
+    currentWordIndex++;
+}
+
+function handleAnswer(button, selectedOption, correctAnswer, freqData) {
+    if (!isAnswerable) return;
+    isAnswerable = false;
+    if (selectedOption === correctAnswer) {
+        score += 10;
+        ui.scoreEl.textContent = score;
+        button.classList.add('correct');
+    } else {
+        button.classList.add('incorrect');
+        Array.from(ui.optionsEl.children).forEach(btn => {
+            if (btn.textContent === correctAnswer) {
+                btn.classList.add('correct');
+            }
+        });
+    }
+    const freqText = `📊 역대 ${freqData}회 출제`;
+    ui.freqInfoContainer.innerHTML = `<div class="freq-info text-center bg-slate-100 p-2 rounded-md text-slate-600 font-semibold">${freqText}</div>`;
+    setTimeout(() => {
+        const freqInfoEl = ui.freqInfoContainer.querySelector('.freq-info');
+        if (freqInfoEl) freqInfoEl.classList.add('visible');
+    }, 10);
+    setTimeout(() => {
+        if (timer > 0) {
+            loadNextWord();
+        }
+    }, 1500);
+}
+
+async function endGame() {
+    clearInterval(timerInterval);
+    ui.progressBar.style.transition = 'none';
+    ui.finalScoreEl.textContent = score;
+    const elapsedTime = Date.now() - gameStartTime;
+    const user = auth.currentUser;
+    if (!user) {
+        switchScreen('end');
+        return;
+    }
+    const userScoreRef = db.collection("scores").doc(user.uid); // 수정한 부분
+    try {
+        const docSnap = await userScoreRef.get(); // 수정한 부분
+        if (docSnap.exists) { // .exists() 대신 .exists
+            const existingData = docSnap.data();
+            const isNewHighScore = score > (existingData.score || 0) || (score === existingData.score && elapsedTime < (existingData.elapsedTime || Infinity));
+            if (isNewHighScore) {
+                await userScoreRef.update({ // 수정한 부분
+                    score: score,
+                    elapsedTime: elapsedTime,
+                    name: nickname,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+                });
+            }
+        } else {
+            await userScoreRef.set({ // 수정한 부분
+                uid: user.uid,
+                name: nickname,
+                score: score,
+                elapsedTime: elapsedTime,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+            });
+        }
+    } catch (error) {
+        console.error("Error saving score: ", error);
+        showCustomAlert('점수 저장에 실패했습니다. Firestore 보안 규칙을 확인해주세요.');
+    }
+    switchScreen('end');
+}
+
+async function submitEmail() {
+    const email = ui.emailInput.value.trim();
+    if (!email) {
+        showCustomAlert('이벤트에 참여하시려면 이메일을 입력해주세요!');
+        return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showCustomAlert('올바른 이메일 형식을 입력해주세요.');
+        return;
+    }
+    ui.submitEmailBtn.disabled = true;
+    ui.submitEmailBtn.textContent = '제출 중...';
+    try {
+        const user = auth.currentUser;
+        await db.collection("emails").add({ // 수정한 부분
+            uid: user ? user.uid : 'anonymous',
+            name: nickname,
+            email: email,
+            score: score,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp() // 수정한 부분
+        });
+        showCustomAlert('이벤트 참여가 완료되었습니다!');
+        ui.emailInput.value = '';
+        ui.submitEmailBtn.textContent = '제출 완료 ✅';
+    } catch (error) {
+        showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+        ui.submitEmailBtn.disabled = false;
+        ui.submitEmailBtn.textContent = '이메일 제출';
+    }
+}
+
+function displayLeaderboard(scores) {
+    ui.leaderboardList.innerHTML = '';
+    if (!scores || scores.length === 0) {
+        ui.leaderboardList.innerHTML = '<li class="text-center text-slate-400 p-4">아직 등록된 점수가 없어요.<br>첫 번째 챔피언이 되어보세요!</li>';
+        return;
+    }
+    scores.forEach((data, index) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between bg-slate-100 p-3 rounded-lg';
+        const timeDisplay = data.elapsedTime ? `<span class="text-xs text-slate-500 font-poppins">${(data.elapsedTime / 1000).toFixed(2)}초</span>` : '';
+        li.innerHTML = `
+            <div class="flex items-center">
+                <span class="rank font-bold text-sm bg-slate-300 text-slate-600 rounded-full w-6 h-6 flex items-center justify-center mr-3">${index + 1}</span>
+                <span class="font-semibold text-slate-700">${data.name}</span>
+            </div>
+            <div class="text-right">
+                <span class="font-bold font-poppins text-purple-600">${data.score}점</span>
+                ${timeDisplay}
+            </div>
+        `;
+        ui.leaderboardList.appendChild(li);
+    });
+}
+
+function subscribeToLeaderboard() {
+    const q = db.collection("scores").orderBy("score", "desc").orderBy("elapsedTime", "asc").limit(10); // 수정한 부분
+    q.onSnapshot((querySnapshot) => { // 수정한 부분
+        const scores = [];
+        querySnapshot.forEach((doc) => { scores.push(doc.data()); });
+        displayLeaderboard(scores);
+    }, (error) => {
+        console.error("Leaderboard subscription error: ", error);
+        let message = '랭킹을 불러오는 데 실패했습니다.<br>잠시 후 다시 시도해주세요.';
+        if (error.code === 'permission-denied') {
+            message = '랭킹을 볼 권한이 없습니다.<br>Firestore 보안 규칙을 확인해주세요.';
+        }
+        ui.leaderboardList.innerHTML = `<li class="text-center text-slate-400 p-4 text-red-500">${message}</li>`;
+    });
+}
+
+function openShareModal() {
+    ui.shareModal.modal.style.display = 'block';
+    ui.shareModal.backdrop.style.display = 'block';
+}
+
+function closeShareModal() {
+    ui.shareModal.modal.style.display = 'none';
+    ui.shareModal.backdrop.style.display = 'none';
+}
+
+async function shareToKakao() {
+    if (!Kakao.isInitialized()) {
+        try {
+            const result = await getKakaoKey();
+            const kakaoKey = result.data.key;
+            Kakao.init(kakaoKey);
+        } catch (error) {
+            console.error("카카오 키를 가져오는 데 실패했습니다:", error);
+            showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.');
+            return;
+        }
+    }
     Kakao.Share.sendDefault({
         objectType: 'feed',
-        content: {
-            title: '수단비 단어 챌린지',
-            description: `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`,
-            imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png',
-            link: { mobileWebUrl: window.location.href, webUrl: window.location.href, },
-        },
+        content: { title: '수단비 단어 챌린지', description: `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`, imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png', link: { mobileWebUrl: window.location.href, webUrl: window.location.href, }, },
         buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}],
     });
 }
-        
-        function checkStoredNickname() {
-            const storedNickname = localStorage.getItem('sudanbiNickname');
-            if (storedNickname) {
-                ui.startNicknameInput.value = storedNickname;
-                ui.startNicknameInput.disabled = true;
-                ui.nicknameLabel.textContent = `${storedNickname}님, 다시 도전하세요!`;
-            }
-        }
 
-        function setChallengeWeekInfo() {
-            const currentWeek = 1;
-            const month = new Date().getMonth() + 1;
-            ui.challengeWeekInfoEl.textContent = `🏆 ${month}월 ${currentWeek}주차 챌린지 진행 중 🏆`;
-        }
+function checkStoredNickname() {
+    const storedNickname = localStorage.getItem('sudanbiNickname');
+    if (storedNickname) {
+        ui.startNicknameInput.value = storedNickname;
+        ui.startNicknameInput.disabled = true;
+        ui.nicknameLabel.textContent = `${storedNickname}님, 다시 도전하세요!`;
+    }
+}
 
-        ui.startBtn.addEventListener('click', initGame);
-        ui.restartBtn.addEventListener('click', () => location.reload());
-        ui.submitEmailBtn.addEventListener('click', submitEmail);
-        
-        ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
-        ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
-        ui.shareBtn.addEventListener('click', openShareModal);
-        ui.shareModal.closeBtn.addEventListener('click', closeShareModal);
-        ui.shareModal.backdrop.addEventListener('click', closeShareModal);
-        ui.shareModal.kakaoBtn.addEventListener('click', shareToKakao);
-        ui.shareModal.copyLinkBtn.addEventListener('click', () => {
-            const shareText = `🏆 수단비 단어 챌린지에서 ${score}점을 기록했어요! 당신도 도전해보세요! ${window.location.href}`;
-            navigator.clipboard.writeText(shareText).then(() => {
-                ui.shareModal.copyLinkBtn.textContent = '✅ 복사 완료!';
-                setTimeout(() => { ui.shareModal.copyLinkBtn.textContent = '링크 복사하기'; }, 2000);
-            });
-        });
-        
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                console.log("Anonymous user signed in:", user.uid);
-                setChallengeWeekInfo();
-                subscribeToLeaderboard();
-                checkStoredNickname();
-            } else {
-                signInAnonymously(auth).catch((error) => console.error("Anonymous sign-in failed:", error));
-            }
-        });
+function setChallengeWeekInfo() {
+    const currentWeek = 1;
+    const month = new Date().getMonth() + 1;
+    ui.challengeWeekInfoEl.textContent = `🏆 ${month}월 ${currentWeek}주차 챌린지 진행 중 🏆`;
+}
+
+ui.startBtn.addEventListener('click', initGame);
+ui.restartBtn.addEventListener('click', () => location.reload());
+ui.submitEmailBtn.addEventListener('click', submitEmail);
+ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
+ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
+ui.shareBtn.addEventListener('click', openShareModal);
+ui.shareModal.closeBtn.addEventListener('click', closeShareModal);
+ui.shareModal.backdrop.addEventListener('click', closeShareModal);
+ui.shareModal.kakaoBtn.addEventListener('click', shareToKakao);
+ui.shareModal.copyLinkBtn.addEventListener('click', () => {
+    const shareText = `🏆 수단비 단어 챌린지에서 ${score}점을 기록했어요! 당신도 도전해보세요! ${window.location.href}`;
+    navigator.clipboard.writeText(shareText).then(() => {
+        ui.shareModal.copyLinkBtn.textContent = '✅ 복사 완료!';
+        setTimeout(() => { ui.shareModal.copyLinkBtn.textContent = '링크 복사하기'; }, 2000);
+    });
+});
+
+auth.onAuthStateChanged((user) => { // 수정한 부분
+    if (user) {
+        console.log("Anonymous user signed in:", user.uid);
+        setChallengeWeekInfo();
+        subscribeToLeaderboard();
+        checkStoredNickname();
+    } else {
+        auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error)); // 수정한 부분
+    }
+});
 
     </script>
 </body>
