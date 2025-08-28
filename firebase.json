@@ -9,6 +9,7 @@
     {
       "source": "functions",
       "codebase": "default",
+      "region": "asia-northeast3",
       "ignore": [
         "node_modules",
         ".git",
@@ -17,5 +18,19 @@
         "*.local"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }
