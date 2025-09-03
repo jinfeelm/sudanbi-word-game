@@ -37,10 +37,13 @@
         .btn-primary {
             background: linear-gradient(135deg, #667eea, #764ba2);
             transition: all 0.3s ease;
+            /* ❗️ 변경점: 기본 그림자 추가 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px -10px rgba(118, 75, 162, 0.8);
+            /* ❗️ 변경점: 더 입체적인 그림자 효과로 변경 */
+            box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4), 0 4px 6px -2px rgba(118, 75, 162, 0.2);
         }
         .btn-primary:disabled {
             background: #d1d5db;
@@ -132,9 +135,10 @@
                 <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary">
                     도전 시작!
                 </button>
-                <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg hover:opacity-90 transition hidden items-center justify-center">
+                <!-- ❗️ 변경점: 버튼 UI/UX 개선 (그림자, 호버 효과, 패딩 조절) -->
+                <button id="share-for-chance-btn" class="w-full py-3 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 hidden items-center justify-center">
                      <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
-                    공유하고 기회 얻기!
+                    <span>공유하고 기회 얻기!</span>
                 </button>
             </div>
         </div>
@@ -150,7 +154,7 @@
                 <div id="progress-bar" class="bg-purple-600 h-2.5 rounded-full" style="width: 100%; transition: width 1s linear;"></div>
             </div>
             <div class="flex-grow flex flex-col items-center justify-center">
-                <p id="word" class="text-5xl sm:text-6xl font-bold font-poppins mb-6"></p>
+                <p id="word" class="text-5xl sm:text-6xl font-bold font-poppins mb-6 text-center"></p>
                 <div id="freq-info-container" class="h-12 mb-2">
                 </div>
                 <div id="options" class="w-full space-y-3">
@@ -170,11 +174,15 @@
             </div>
 
             <div class="mt-4 flex space-x-2">
-                <button id="kakao-share-btn-direct" class="flex-1 py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg hover:opacity-90 transition flex items-center justify-center">
+                <!-- ❗️ 변경점: 버튼 UI/UX 개선 -->
+                <button id="kakao-share-btn-direct" class="flex-1 py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 flex items-center justify-center">
                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
-                    카톡으로 공유하기
+                    <span>카톡으로 공유하기</span>
                 </button>
-                <button id="restart-btn" class="flex-1 py-3 bg-slate-200 text-slate-800 font-bold rounded-lg hover:bg-slate-300 transition">다시 도전</button>
+                <!-- ❗️ 변경점: 버튼 UI/UX 개선 -->
+                <button id="restart-btn" class="flex-1 py-3 bg-slate-200 text-slate-800 font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 hover:bg-slate-300 transition-all duration-200">
+                    다시 도전
+                </button>
             </div>
         </div>
 
@@ -249,7 +257,7 @@
             if (type === 'correct') {
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
-            } else { // incorrect
+            } else {
                 oscillator.type = 'square';
                 oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
             }
@@ -341,8 +349,7 @@
         }
         
         function getCurrentChallengeWeek() {
-            // ❗️ 변경점: 시즌 시작일을 OBT 시작일인 2025년 9월 1일로 변경
-            const SEASON_1_START_DATE = new Date('2025-09-01T00:00:00+09:00'); // 시즌1 시작일 (월요일)
+            const SEASON_1_START_DATE = new Date('2025-09-01T00:00:00+09:00'); 
             const now = new Date();
             const timeDiff = now.getTime() - SEASON_1_START_DATE.getTime();
             
@@ -561,7 +568,6 @@
         }
 
         function subscribeToLeaderboard() {
-            // ❗️ 변경점: 주차별 필터링을 제거하여 종합 랭킹으로 변경
             const q = db.collection("scores")
                         .orderBy("score", "desc")
                         .orderBy("elapsedTime", "asc").limit(10);
@@ -658,8 +664,7 @@
                     hasPlayedToday = (data.playCount || 0) > 0;
                     hasSharedToday = data.hasSharedToday || false;
                 } else {
-                    // 날짜가 바뀌었으면 공유 기록 초기화
-                    await attemptRef.set({ hasSharedToday: false }, { merge: true });
+                    await attemptRef.set({ hasSharedToday: false, playCount: 0 }, { merge: true });
                 }
             }
 
@@ -674,12 +679,12 @@
             }
         }
 
-
-        ui.startBtn.addEventListener('click', initGame);
         ui.restartBtn.addEventListener('click', () => {
              switchScreen('start');
              checkPlayChance();
         });
+
+        ui.startBtn.addEventListener('click', initGame);
         ui.submitEmailBtn.addEventListener('click', submitEmail);
         ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
         ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
