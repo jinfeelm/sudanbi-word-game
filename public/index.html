@@ -127,9 +127,16 @@
                     <li class="text-center text-slate-400 p-4">랭킹을 불러오는 중...</li>
                 </ul>
             </div>
-            <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary">
-                도전 시작!
-            </button>
+
+            <div id="start-button-container" class="w-full">
+                <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary">
+                    도전 시작!
+                </button>
+                <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg hover:opacity-90 transition hidden items-center justify-center">
+                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
+                    공유하고 기회 얻기!
+                </button>
+            </div>
         </div>
 
         <div id="game-screen" class="screen flex-col h-full">
@@ -156,34 +163,21 @@
             <p class="text-lg mt-2">최종 점수</p>
             <p id="final-score" class="text-8xl font-bold font-poppins my-4 gradient-text"></p>
             
-            <div class="w-full bg-slate-100 p-4 rounded-lg">
+            <div id="email-form-container" class="w-full bg-slate-100 p-4 rounded-lg">
                 <p class="font-bold mb-2">랭킹이 자동 등록되었습니다!<br/>출시 알림 & 경품 이벤트에 참여하세요!</p>
                 <input type="email" id="email-input" placeholder="이메일 남기기 (선택사항)" class="w-full p-3 border-2 border-slate-300 rounded-md text-center mt-2 focus:border-purple-500 focus:ring-purple-500 transition">
                 <button id="submit-email-btn" class="w-full py-3 mt-3 text-lg font-bold text-white rounded-lg btn-primary">이메일 제출</button>
             </div>
 
             <div class="mt-4 flex space-x-2">
-                <button id="share-btn" class="flex-1 py-3 bg-slate-700 text-white font-bold rounded-lg hover:bg-slate-800 transition">결과 공유하기</button>
+                <button id="kakao-share-btn-direct" class="flex-1 py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg hover:opacity-90 transition flex items-center justify-center">
+                    <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
+                    카톡으로 공유하기
+                </button>
                 <button id="restart-btn" class="flex-1 py-3 bg-slate-200 text-slate-800 font-bold rounded-lg hover:bg-slate-300 transition">다시 도전</button>
             </div>
         </div>
 
-    </div>
-
-    <div id="share-modal-backdrop" class="modal-backdrop"></div>
-    <div id="share-modal" class="modal w-11/12 max-w-sm bg-white rounded-2xl shadow-lg p-6 text-center">
-        <h3 class="text-2xl font-bold mb-4">내 점수 공유하기</h3>
-        <p class="text-slate-500 mb-6">친구들에게 도전장을 보내보세요!</p>
-        <div class="space-y-3">
-            <button id="kakao-share-btn" class="w-full flex items-center justify-center py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg hover:opacity-90 transition">
-                <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
-                카카오톡으로 공유
-            </button>
-            <button id="copy-link-btn" class="w-full py-3 bg-slate-200 text-slate-800 font-bold rounded-lg hover:bg-slate-300 transition">
-                링크 복사하기
-            </button>
-        </div>
-        <button id="close-share-modal-btn" class="mt-6 text-slate-400 hover:text-slate-600 font-semibold">닫기</button>
     </div>
 
     <div id="alert-modal-backdrop" class="modal-backdrop"></div>
@@ -202,7 +196,6 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         const app = firebase.app();
-        // ✅ 이 부분이 v8 호환 라이브러리의 올바른 문법입니다.
         const functions = app.functions('asia-northeast3');  
 
         const isNicknameAvailable = functions.httpsCallable('isNicknameAvailable');
@@ -211,6 +204,7 @@
         const ui = {
             screens: { start: document.getElementById('start-screen'), game: document.getElementById('game-screen'), end: document.getElementById('end-screen') },
             startBtn: document.getElementById('start-btn'),
+            shareForChanceBtn: document.getElementById('share-for-chance-btn'),
             startNicknameInput: document.getElementById('start-nickname-input'),
             nicknameContainer: document.getElementById('nickname-container'),
             nicknameLabel: document.getElementById('nickname-label'),
@@ -221,19 +215,49 @@
             optionsEl: document.getElementById('options'),
             freqInfoContainer: document.getElementById('freq-info-container'),
             finalScoreEl: document.getElementById('final-score'),
+            emailFormContainer: document.getElementById('email-form-container'),
             emailInput: document.getElementById('email-input'),
             submitEmailBtn: document.getElementById('submit-email-btn'),
-            shareBtn: document.getElementById('share-btn'),
             restartBtn: document.getElementById('restart-btn'),
             leaderboardList: document.getElementById('leaderboard-list'),
             challengeWeekInfoEl: document.getElementById('challenge-week-info'),
-            shareModal: { backdrop: document.getElementById('share-modal-backdrop'), modal: document.getElementById('share-modal'), closeBtn: document.getElementById('close-share-modal-btn'), kakaoBtn: document.getElementById('kakao-share-btn'), copyLinkBtn: document.getElementById('copy-link-btn') },
             alertModal: { backdrop: document.getElementById('alert-modal-backdrop'), modal: document.getElementById('alert-modal'), message: document.getElementById('alert-modal-message'), closeBtn: document.getElementById('close-alert-modal-btn') }
         };
 
-        let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime;
+        let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime, currentChallengeWeek;
         let shuffledWords = [];
         let isAnswerable = true;
+        
+        let audioCtx;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('Web Audio API is not supported in this browser');
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.01);
+
+            if (type === 'correct') {
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(600, audioCtx.currentTime);
+            } else { // incorrect
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(200, audioCtx.currentTime);
+            }
+            
+            oscillator.start(audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2);
+            oscillator.stop(audioCtx.currentTime + 0.2);
+        }
 
         function showCustomAlert(message) {
             ui.alertModal.message.textContent = message;
@@ -250,11 +274,22 @@
             Object.values(ui.screens).forEach(screen => screen.classList.remove('active'));
             ui.screens[screenName].classList.add('active');
         }
+        
+        function adjustFontSize(element, initialFontSize, minFontSize = 10, padding = 20) {
+            element.style.fontSize = `${initialFontSize}px`;
+            let currentFontSize = initialFontSize;
+            const containerWidth = element.parentElement.clientWidth - padding;
+
+            while (element.scrollWidth > containerWidth && currentFontSize > minFontSize) {
+                currentFontSize--;
+                element.style.fontSize = `${currentFontSize}px`;
+            }
+        }
 
         async function initGame() {
             nickname = ui.startNicknameInput.value.trim();
             if (ui.startNicknameInput.disabled) {
-                // 닉네임 고정
+                // Nickname is fixed
             } else {
                 if (nickname.length < 2 || nickname.length > 10) {
                     showCustomAlert('닉네임은 2자 이상 10자 이하로 입력해주세요!');
@@ -266,16 +301,14 @@
                     const result = await isNicknameAvailable({ nickname: nickname });
                     if (!result.data.isAvailable) {
                         showCustomAlert('이미 사용 중인 닉네임입니다. 다른 닉네임을 사용해주세요!');
-                        ui.startBtn.disabled = false;
-                        ui.startBtn.textContent = '도전 시작!';
+                        await checkPlayChance();
                         return;
                     }
                     localStorage.setItem('sudanbiNickname', nickname);
                 } catch (error) {
-                    console.error("닉네임 확인 오류:", error);
+                    console.error("Nickname check error:", error);
                     showCustomAlert(error.message || '닉네임 확인 중 오류가 발생했습니다.');
-                    ui.startBtn.disabled = false;
-                    ui.startBtn.textContent = '도전 시작!';
+                    await checkPlayChance();
                     return;
                 }
             }
@@ -286,9 +319,8 @@
             try {
                 const wordsForThisWeek = await getWordsForCurrentWeek();
                 if (!wordsForThisWeek || wordsForThisWeek.length === 0) {
-                    showCustomAlert('이번주 챌린지 단어가 없습니다. 관리자에게 문의해주세요.');
-                    ui.startBtn.disabled = false;
-                    ui.startBtn.textContent = '도전 시작!';
+                    showCustomAlert(`이번 ${currentChallengeWeek}주차 챌린지 단어가 없습니다. 관리자에게 문의해주세요.`);
+                    await checkPlayChance();
                     return;
                 }
                 score = 0;
@@ -302,25 +334,33 @@
                 loadNextWord();
                 startTimer();
             } catch (error) {
-                console.error("게임 시작 오류:", error);
+                console.error("Game start error:", error);
                 showCustomAlert(error.message || '오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
-            } finally {
-                ui.startBtn.disabled = false;
-                ui.startBtn.textContent = '도전 시작!';
+                await checkPlayChance();
             }
+        }
+        
+        function getCurrentChallengeWeek() {
+            // ❗️ 변경점: 시즌 시작일을 OBT 시작일인 2025년 9월 1일로 변경
+            const SEASON_1_START_DATE = new Date('2025-09-01T00:00:00+09:00'); // 시즌1 시작일 (월요일)
+            const now = new Date();
+            const timeDiff = now.getTime() - SEASON_1_START_DATE.getTime();
+            
+            if (timeDiff < 0) return 1;
+            
+            const weekDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24 * 7));
+            return weekDiff + 1;
         }
 
         async function getWordsForCurrentWeek() {
-            const currentWeek = 1;
-            const weekKey = `Week ${currentWeek}`;
+            currentChallengeWeek = getCurrentChallengeWeek();
+            const weekKey = `Week ${currentChallengeWeek}`;
             try {
                 const seasonDocRef = db.collection("seasons").doc("season1");
                 const seasonDoc = await seasonDocRef.get();
                 if (seasonDoc.exists) {
                     const allWeeksData = seasonDoc.data();
-                    const wordData = allWeeksData[weekKey];
-                    if (wordData && wordData.length > 0) return wordData;
-                    return allWeeksData['Week 1'] || [];
+                    return allWeeksData[weekKey] || [];
                 }
                 console.warn("Season 1 document does not exist.");
                 return [];
@@ -352,14 +392,20 @@
             }
             const currentWord = shuffledWords[currentWordIndex];
             ui.wordEl.textContent = currentWord.단어;
+            
+            const baseFontSize = window.innerWidth < 640 ? 48 : 60;
+            adjustFontSize(ui.wordEl, baseFontSize, 24);
+
             ui.optionsEl.innerHTML = '';
             const options = [currentWord.정답, currentWord.오답1, currentWord.오답2, currentWord.오답3];
             options.sort(() => 0.5 - Math.random()).forEach(option => {
                 const button = document.createElement('button');
                 button.textContent = option;
-                button.className = 'w-full p-4 border-2 border-slate-200 rounded-lg text-lg transition duration-200 option-btn';
+                button.className = 'w-full p-4 border-2 border-slate-200 rounded-lg text-xl transition duration-200 option-btn';
                 button.onclick = () => handleAnswer(button, option, currentWord.정답, currentWord.역대_빈도);
                 ui.optionsEl.appendChild(button);
+                
+                adjustFontSize(button, 20, 14, 32);
             });
             currentWordIndex++;
         }
@@ -368,10 +414,12 @@
             if (!isAnswerable) return;
             isAnswerable = false;
             if (selectedOption === correctAnswer) {
+                playSound('correct');
                 score += 10;
                 ui.scoreEl.textContent = score;
                 button.classList.add('correct');
             } else {
+                playSound('incorrect');
                 button.classList.add('incorrect');
                 Array.from(ui.optionsEl.children).forEach(btn => {
                     if (btn.textContent === correctAnswer) {
@@ -385,11 +433,12 @@
                 const freqInfoEl = ui.freqInfoContainer.querySelector('.freq-info');
                 if (freqInfoEl) freqInfoEl.classList.add('visible');
             }, 10);
+
             setTimeout(() => {
                 if (timer > 0) {
                     loadNextWord();
                 }
-            }, 1500);
+            }, 800);
         }
 
         async function endGame() {
@@ -402,6 +451,17 @@
                 switchScreen('end');
                 return;
             }
+
+            try {
+                const attemptRef = db.collection('attempts').doc(user.uid);
+                await attemptRef.set({
+                    playCount: firebase.firestore.FieldValue.increment(1),
+                    lastPlayDate: new Date().toISOString().slice(0, 10)
+                }, { merge: true });
+            } catch (error) {
+                console.error("Error updating attempts:", error);
+            }
+
             const userScoreRef = db.collection("scores").doc(user.uid);
             try {
                 const docSnap = await userScoreRef.get();
@@ -433,7 +493,7 @@
         }
 
         async function submitEmail() {
-            const email = ui.emailInput.value.trim();
+             const email = ui.emailInput.value.trim();
             if (!email) {
                 showCustomAlert('이벤트에 참여하시려면 이메일을 입력해주세요!');
                 return;
@@ -447,20 +507,31 @@
             ui.submitEmailBtn.textContent = '제출 중...';
             try {
                 const user = auth.currentUser;
-                await db.collection("emails").add({
-                    uid: user ? user.uid : 'anonymous',
+                if (!user) {
+                    showCustomAlert('사용자 인증 정보가 없습니다. 새로고침 후 다시 시도해주세요.');
+                    ui.submitEmailBtn.disabled = false;
+                    return;
+                }
+                
+                await db.collection("emails").doc(user.uid).set({
                     name: nickname,
                     email: email,
                     score: score,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
+
                 showCustomAlert('이벤트 참여가 완료되었습니다!');
-                ui.emailInput.value = '';
-                ui.submitEmailBtn.textContent = '제출 완료 ✅';
+                ui.emailFormContainer.style.display = 'none';
+
             } catch (error) {
-                showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.');
-            } finally {
-                ui.submitEmailBtn.disabled = false;
+                console.error("Email submission error:", error);
+                if (error.code === 'permission-denied') {
+                    showCustomAlert('이미 이벤트에 참여하셨습니다!');
+                    ui.emailFormContainer.style.display = 'none';
+                } else {
+                    showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.');
+                    ui.submitEmailBtn.disabled = false;
+                }
                 ui.submitEmailBtn.textContent = '이메일 제출';
             }
         }
@@ -490,7 +561,11 @@
         }
 
         function subscribeToLeaderboard() {
-            const q = db.collection("scores").orderBy("score", "desc").orderBy("elapsedTime", "asc").limit(10);
+            // ❗️ 변경점: 주차별 필터링을 제거하여 종합 랭킹으로 변경
+            const q = db.collection("scores")
+                        .orderBy("score", "desc")
+                        .orderBy("elapsedTime", "asc").limit(10);
+            
             q.onSnapshot((querySnapshot) => {
                 const scores = [];
                 querySnapshot.forEach((doc) => { scores.push(doc.data()); });
@@ -504,18 +579,8 @@
                 ui.leaderboardList.innerHTML = `<li class="text-center text-slate-400 p-4 text-red-500">${message}</li>`;
             });
         }
-
-        function openShareModal() {
-            ui.shareModal.modal.style.display = 'block';
-            ui.shareModal.backdrop.style.display = 'block';
-        }
-
-        function closeShareModal() {
-            ui.shareModal.modal.style.display = 'none';
-            ui.shareModal.backdrop.style.display = 'none';
-        }
-
-        async function shareToKakao() {
+        
+        async function shareToKakao(isForChance = false) {
             if (!Kakao.isInitialized()) {
                 try {
                     const result = await getKakaoKey();
@@ -527,10 +592,37 @@
                     return;
                 }
             }
+            
             Kakao.Share.sendDefault({
                 objectType: 'feed',
-                content: { title: '수단비 단어 챌린지', description: `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`, imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png', link: { mobileWebUrl: window.location.href, webUrl: window.location.href, }, },
+                content: {
+                    title: '수단비 단어 챌린지',
+                    description: isForChance ? `친구야, 같이 수능 영단어 퀴즈 풀자!` : `${nickname}님이 ${score}점을 기록했어요! 당신의 어휘력에 도전하세요!`,
+                    imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png',
+                    link: { mobileWebUrl: window.location.href, webUrl: window.location.href, },
+                },
                 buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}],
+                success: async function() {
+                    if (isForChance) {
+                        const user = auth.currentUser;
+                        if(user) {
+                            try {
+                                const attemptRef = db.collection('attempts').doc(user.uid);
+                                await attemptRef.set({ hasSharedToday: true }, { merge: true });
+                                showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
+                                await checkPlayChance();
+                            } catch (error) {
+                                console.error("Error updating share status:", error);
+                            }
+                        }
+                    }
+                },
+                fail: function(error) {
+                    console.log(error);
+                    if (isForChance) {
+                        showCustomAlert('공유가 취소되었어요. 기회를 얻으려면 공유를 완료해주세요!');
+                    }
+                }
             });
         }
 
@@ -544,34 +636,76 @@
         }
 
         function setChallengeWeekInfo() {
-            const currentWeek = 1;
+            currentChallengeWeek = getCurrentChallengeWeek();
             const month = new Date().getMonth() + 1;
-            ui.challengeWeekInfoEl.textContent = `🏆 ${month}월 ${currentWeek}주차 챌린지 진행 중 🏆`;
+            ui.challengeWeekInfoEl.textContent = `🏆 ${month}월 ${currentChallengeWeek}주차 챌린지 진행 중 🏆`;
+        }
+        
+        async function checkPlayChance() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const today = new Date().toISOString().slice(0, 10);
+            const attemptRef = db.collection('attempts').doc(user.uid);
+            const docSnap = await attemptRef.get();
+
+            let hasPlayedToday = false;
+            let hasSharedToday = false;
+
+            if (docSnap.exists) {
+                const data = docSnap.data();
+                if (data.lastPlayDate === today) {
+                    hasPlayedToday = (data.playCount || 0) > 0;
+                    hasSharedToday = data.hasSharedToday || false;
+                } else {
+                    // 날짜가 바뀌었으면 공유 기록 초기화
+                    await attemptRef.set({ hasSharedToday: false }, { merge: true });
+                }
+            }
+
+            if (!hasPlayedToday || hasSharedToday) {
+                ui.startBtn.classList.remove('hidden');
+                ui.shareForChanceBtn.classList.add('hidden');
+                ui.startBtn.disabled = false;
+                ui.startBtn.textContent = '도전 시작!';
+            } else {
+                ui.startBtn.classList.add('hidden');
+                ui.shareForChanceBtn.classList.remove('hidden');
+            }
         }
 
+
         ui.startBtn.addEventListener('click', initGame);
-        ui.restartBtn.addEventListener('click', () => location.reload());
+        ui.restartBtn.addEventListener('click', () => {
+             switchScreen('start');
+             checkPlayChance();
+        });
         ui.submitEmailBtn.addEventListener('click', submitEmail);
         ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
         ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
-        ui.shareBtn.addEventListener('click', openShareModal);
-        ui.shareModal.closeBtn.addEventListener('click', closeShareModal);
-        ui.shareModal.backdrop.addEventListener('click', closeShareModal);
-        ui.shareModal.kakaoBtn.addEventListener('click', shareToKakao);
-        ui.shareModal.copyLinkBtn.addEventListener('click', () => {
-            const shareText = `🏆 수단비 단어 챌린지에서 ${score}점을 기록했어요! 당신도 도전해보세요! ${window.location.href}`;
-            navigator.clipboard.writeText(shareText).then(() => {
-                ui.shareModal.copyLinkBtn.textContent = '✅ 복사 완료!';
-                setTimeout(() => { ui.shareModal.copyLinkBtn.textContent = '링크 복사하기'; }, 2000);
-            });
-        });
+        ui.shareForChanceBtn.addEventListener('click', () => shareToKakao(true));
+        document.getElementById('kakao-share-btn-direct').addEventListener('click', () => shareToKakao(false));
 
-        auth.onAuthStateChanged((user) => {
+        auth.onAuthStateChanged(async (user) => {
             if (user) {
                 console.log("Anonymous user signed in:", user.uid);
+                
+                try {
+                    const emailDocRef = db.collection("emails").doc(user.uid);
+                    const docSnap = await emailDocRef.get();
+                    if (docSnap.exists()) {
+                        ui.emailFormContainer.style.display = 'none';
+                    } else {
+                        ui.emailFormContainer.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error("Error checking email record:", error);
+                }
+
                 setChallengeWeekInfo();
                 subscribeToLeaderboard();
                 checkStoredNickname();
+                await checkPlayChance();
             } else {
                 auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error));
             }
@@ -579,3 +713,4 @@
     </script>
 </body>
 </html>
+

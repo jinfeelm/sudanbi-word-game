@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // scores: 랭킹은 누구나 읽을 수 있고, 본인의 점수만 생성/수정 가능합니다.
+    match /scores/{userId} {
+      allow read;
+      allow create, update: if request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // seasons: 단어 데이터는 누구나 읽기만 가능합니다.
+    match /seasons/{seasonId} {
+      allow read;
+      allow write: if false;
+    }
+    
+    // emails: 본인의 uid를 문서 ID로 사용, 본인만 생성/읽기 가능
+    match /emails/{userId} {
+      // ❗️ 변경점: 본인이 자신의 이메일 제출 기록을 확인할 수 있도록 read 권한 추가
+      allow read: if request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // attempts: 사용자는 자신의 도전 기록(플레이 횟수, 공유 여부)만 읽고 쓸 수 있습니다.
+    match /attempts/{userId} {
+      allow read, write: if request.auth.uid == userId;
+    }
+  }
+}

@@ -53,3 +53,50 @@ exports.getKakaoKey = onCall(
     return { key: kakaoKey };
   }
 );
+
+/**
+ * 사용자의 도전 횟수를 기록하는 함수입니다.
+ */
+exports.recordAttempt = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    // 함수를 호출한 사용자의 UID를 가져옵니다.
+    const uid = request.auth.uid;
+    if (!uid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "인증된 사용자만 접근할 수 있습니다."
+      );
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const attemptDocRef = db.collection("attempts").doc(uid);
+
+    try {
+      // Firestore 트랜잭션을 사용하여 데이터의 일관성을 보장합니다.
+      await db.runTransaction(async (transaction) => {
+        const attemptDoc = await transaction.get(attemptDocRef);
+
+        if (attemptDoc.exists && attemptDoc.data().date === today) {
+          // 오늘 날짜의 기록이 있으면 count를 1 증가시킵니다.
+          const newCount = (attemptDoc.data().count || 0) + 1;
+          transaction.update(attemptDocRef, { count: newCount });
+        } else {
+          // 오늘 날짜의 기록이 없으면 새로 생성합니다.
+          transaction.set(attemptDocRef, {
+            uid: uid,
+            date: today,
+            count: 1,
+          });
+        }
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Error recording attempt:", error);
+      throw new HttpsError(
+        "internal",
+        "도전 횟수를 기록하는 중 오류가 발생했습니다."
+      );
+    }
+  }
+);
