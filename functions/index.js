@@ -58,14 +58,21 @@ exports.checkAttempts = onCall({ region: "asia-northeast3", cors: true }, async 
         return { canPlay: true, reason: "First play of the day." };
     }
     
+    // playCount가 1일 때, 공유를 했다면 한 번 더 플레이 가능
     if (playCount === 1 && hasShared) {
         return { canPlay: true, reason: "Has an extra chance from sharing." };
     }
-
+    
+    // playCount가 2 이상이거나, 1인데 공유를 안했다면 플레이 불가
+    if (playCount >= 2) {
+         return { canPlay: false, reason: "All chances used for today." };
+    }
+    
     if (playCount >= 1 && !hasShared) {
         return { canPlay: false, reason: "Share to get another chance." };
     }
 
+    // 기본적으로는 플레이 불가
     return { canPlay: false, reason: "All chances used for today." };
 });
 
@@ -104,4 +111,3 @@ exports.recordAttempt = onCall({ region: "asia-northeast3", cors: true }, async 
         throw new HttpsError("internal", "도전 횟수를 기록하는 중 오류가 발생했습니다.");
     }
 });
-
