@@ -65,7 +65,7 @@
                     도전 시작!
                 </button>
                 <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 hidden items-center justify-center">
-                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
+                    <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
                     <span>공유하고 기회 얻기!</span>
                 </button>
             </div>
@@ -102,12 +102,12 @@
             </div>
 
             <div class="mt-4 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                <button id="kakao-share-btn-direct" class="flex-1 py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 flex items-center justify-center">
+                <button id="kakao-share-btn-end" class="flex-1 py-3 bg-[#FEE500] text-[#191919] font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 flex items-center justify-center">
                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
-                    <span>카톡으로 공유하기</span>
+                    <span>공유하고 한 판 더!</span>
                 </button>
-                <button id="restart-btn" class="flex-1 py-3 bg-slate-200 text-slate-800 font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 hover:bg-slate-300 transition-all duration-200">
-                    다시 도전
+                <button id="back-to-start-btn" class="flex-1 py-3 bg-slate-200 text-slate-800 font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 hover:bg-slate-300 transition-all duration-200">
+                    처음으로 돌아가기
                 </button>
             </div>
         </div>
@@ -152,7 +152,7 @@
             emailFormContainer: document.getElementById('email-form-container'),
             emailInput: document.getElementById('email-input'),
             submitEmailBtn: document.getElementById('submit-email-btn'),
-            restartBtn: document.getElementById('restart-btn'),
+            backToStartBtn: document.getElementById('back-to-start-btn'),
             leaderboardList: document.getElementById('leaderboard-list'),
             challengeWeekInfoEl: document.getElementById('challenge-week-info'),
             alertModal: { backdrop: document.getElementById('alert-modal-backdrop'), modal: document.getElementById('alert-modal'), message: document.getElementById('alert-modal-message'), closeBtn: document.getElementById('close-alert-modal-btn') }
@@ -514,13 +514,13 @@
             }
         }
 
-        ui.restartBtn.addEventListener('click', () => { switchScreen('start'); checkPlayChance(); });
+        ui.backToStartBtn.addEventListener('click', () => { switchScreen('start'); checkPlayChance(); });
         ui.startBtn.addEventListener('click', initGame);
         ui.submitEmailBtn.addEventListener('click', submitEmail);
         ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
         ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
         ui.shareForChanceBtn.addEventListener('click', () => shareToKakao(true));
-        document.getElementById('kakao-share-btn-direct').addEventListener('click', () => shareToKakao(false));
+        document.getElementById('kakao-share-btn-end').addEventListener('click', () => shareToKakao(false));
 
         auth.onAuthStateChanged(async (user) => {
             if (user) {
