@@ -104,3 +104,4 @@ exports.recordAttempt = onCall({ region: "asia-northeast3", cors: true }, async 
         throw new HttpsError("internal", "도전 횟수를 기록하는 중 오류가 발생했습니다.");
     }
 });
+

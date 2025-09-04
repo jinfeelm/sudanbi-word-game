@@ -139,7 +139,6 @@
             startBtn: document.getElementById('start-btn'),
             shareForChanceBtn: document.getElementById('share-for-chance-btn'),
             startNicknameInput: document.getElementById('start-nickname-input'),
-            nicknameContainer: document.getElementById('nickname-container'),
             nicknameLabel: document.getElementById('nickname-label'),
             scoreEl: document.getElementById('score'),
             timerEl: document.getElementById('timer'),
@@ -164,9 +163,7 @@
         let audioCtx;
         try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {
-            console.warn('Web Audio API is not supported in this browser');
-        }
+        } catch (e) { console.warn('Web Audio API is not supported in this browser'); }
 
         function playSound(type) { if (!audioCtx) return; const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.01); if (type === 'correct') { o.type = 'sine'; o.frequency.setValueAtTime(600, audioCtx.currentTime); } else { o.type = 'square'; o.frequency.setValueAtTime(200, audioCtx.currentTime); } o.start(audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2); o.stop(audioCtx.currentTime + 0.2); }
         function showCustomAlert(message) { ui.alertModal.message.textContent = message; ui.alertModal.modal.style.display = 'block'; ui.alertModal.backdrop.style.display = 'block'; }
@@ -423,11 +420,13 @@
                         if(user) {
                             try {
                                 const attemptDocRef = db.collection('attempts').doc(user.uid);
-                                await attemptDocRef.set({ hasSharedToday: true }, { merge: true });
+                                // ✅ [수정] Firestore 데이터를 update하는 명확한 방식으로 변경
+                                await attemptDocRef.update({ hasSharedToday: true });
                                 showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
                                 await checkPlayChance();
                             } catch (error) {
                                 console.error("Error updating share status:", error);
+                                showCustomAlert('기회 갱신 중 오류가 발생했습니다. 다시 시도해주세요.');
                             }
                         }
                     }
@@ -494,7 +493,7 @@
                 try {
                     const emailDocRef = db.collection("emails").doc(user.uid);
                     const docSnap = await emailDocRef.get();
-                    if (docSnap.exists) {
+                    if (docSnap.exists) { // .exists()가 아닌 .exists 속성 사용
                         ui.emailFormContainer.style.display = 'none';
                     } else {
                         ui.emailFormContainer.style.display = 'block';
@@ -513,3 +512,4 @@
     </script>
 </body>
 </html>
+
