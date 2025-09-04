@@ -64,7 +64,7 @@
                 <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary">
                     도전 시작!
                 </button>
-                <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 hidden items-center justify-center">
+                <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 hidden flex items-center justify-center">
                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
                     <span>공유하고 기회 얻기!</span>
                 </button>
@@ -312,27 +312,60 @@
             setTimeout(() => { if (timer > 0) loadNextWord(); }, 800);
         }
 
+        async function updateEndScreenButtons() {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            try {
+                // Firestore에서 현재 도전 가능 상태를 확인합니다.
+                const result = await checkAttempts();
+                const kakaoShareBtn = document.getElementById('kakao-share-btn-end');
+                const buttonTextSpan = kakaoShareBtn.querySelector('span');
+
+                // 이미 기회를 모두 사용한 경우
+                if (result.data.reason === "All chances used for today.") {
+                    buttonTextSpan.textContent = '내 점수 공유하기';
+                    // onclick 핸들러를 '기회 추가 없는' 공유 기능으로 설정합니다.
+                    kakaoShareBtn.onclick = () => shareToKakao(false, true); // isForChance=false, includeScore=true
+                } else {
+                    // 아직 공유로 기회를 얻을 수 있는 경우
+                    buttonTextSpan.textContent = '공유하고 한 판 더!';
+                     // onclick 핸들러를 '기회 추가' 공유 기능으로 설정합니다.
+                    kakaoShareBtn.onclick = () => shareToKakao(true, true); // isForChance=true, includeScore=true
+                }
+            } catch (error) {
+                console.error("Error updating end screen buttons:", error);
+                // 오류 발생 시, 안전하게 '기회 추가 없는' 공유 기능으로 설정합니다.
+                const kakaoShareBtn = document.getElementById('kakao-share-btn-end');
+                kakaoShareBtn.querySelector('span').textContent = '내 점수 공유하기';
+                kakaoShareBtn.onclick = () => shareToKakao(false, true);
+            }
+        }
+
         async function endGame() {
             clearInterval(timerInterval);
             ui.progressBar.style.transition = 'none';
             ui.finalScoreEl.textContent = score;
             const elapsedTime = Date.now() - gameStartTime;
             const user = auth.currentUser;
-            if (!user) return switchScreen('end');
-            const userScoreRef = db.collection("scores").doc(user.uid);
-            try {
-                const docSnap = await userScoreRef.get();
-                if (!docSnap.exists || score > (docSnap.data().score || 0) || (score === docSnap.data().score && elapsedTime < (docSnap.data().elapsedTime || Infinity))) {
-                    await userScoreRef.set({
-                        uid: user.uid, name: nickname, score: score, elapsedTime: elapsedTime,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
+            if (user) {
+                const userScoreRef = db.collection("scores").doc(user.uid);
+                try {
+                    const docSnap = await userScoreRef.get();
+                    if (!docSnap.exists || score > (docSnap.data().score || 0) || (score === docSnap.data().score && elapsedTime < (docSnap.data().elapsedTime || Infinity))) {
+                        await userScoreRef.set({
+                            uid: user.uid, name: nickname, score: score, elapsedTime: elapsedTime,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    }
+                } catch (error) {
+                    console.error("Error saving score: ", error);
+                    showCustomAlert('점수 저장에 실패했습니다.');
                 }
-            } catch (error) {
-                console.error("Error saving score: ", error);
-                showCustomAlert('점수 저장에 실패했습니다.');
             }
             switchScreen('end');
+            // 게임 종료 시점의 상태에 맞게 버튼을 업데이트합니다.
+            await updateEndScreenButtons();
         }
 
         async function submitEmail() {
@@ -400,7 +433,7 @@
               });
         }
         
-        async function shareToKakao(isForChance = false) {
+        async function shareToKakao(isForChance = false, includeScore = false) {
             if (!Kakao.isInitialized()) {
                 try {
                     const result = await getKakaoKey();
@@ -416,11 +449,12 @@
                     try {
                         const attemptDocRef = db.collection('attempts').doc(user.uid);
                         await attemptDocRef.update({ hasSharedToday: true });
-                        // 성공적으로 DB 업데이트 후 폴링 시작
-                        pollForShareSuccess();
+                        // 공유 성공 여부를 확인하고, 점수 공유 시(종료 화면에서 공유 시) 화면을 전환하도록 pollForShareSuccess 호출
+                        pollForShareSuccess(includeScore);
                     } catch (error) {
                         console.error("Error pre-updating share status:", error);
                         showCustomAlert('공유 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+                        return;
                     }
                 }
             }
@@ -429,7 +463,7 @@
                 objectType: 'feed',
                 content: {
                     title: '수단비 단어 챌린지',
-                    description: isForChance ? '친구야, 같이 수능 영단어 퀴즈 풀자!' : `${nickname || '나'}의 점수는 ${score}점! 당신의 어휘력에 도전하세요!`,
+                    description: includeScore ? `${nickname || '나'}의 점수는 ${score}점! 당신의 어휘력에 도전하세요!` : '친구야, 같이 수능 영단어 퀴즈 풀자!',
                     imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png',
                     link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
                 },
@@ -437,7 +471,7 @@
             });
         }
 
-        function pollForShareSuccess() {
+function pollForShareSuccess(shouldSwitchToStart = false) {
             if (isPollingForShare) return;
             isPollingForShare = true;
 
@@ -459,9 +493,14 @@
                         isPollingForShare = false;
                         showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
                         await checkPlayChance();
+                        if (shouldSwitchToStart) {
+                            switchScreen('start');
+                        }
                     }
                 } catch(e) {
                     console.error("Polling error", e);
+                    clearInterval(pollInterval); // 에러 발생 시 폴링 중단
+                    isPollingForShare = false;
                 }
 
             }, 2000);
@@ -519,8 +558,7 @@
         ui.submitEmailBtn.addEventListener('click', submitEmail);
         ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
         ui.alertModal.backdrop.addEventListener('click', closeCustomAlert);
-        ui.shareForChanceBtn.addEventListener('click', () => shareToKakao(true));
-        document.getElementById('kakao-share-btn-end').addEventListener('click', () => shareToKakao(false));
+        ui.shareForChanceBtn.addEventListener('click', () => shareToKakao(true, false));
 
         auth.onAuthStateChanged(async (user) => {
             if (user) {
