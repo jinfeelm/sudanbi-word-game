@@ -4,16 +4,41 @@
       "collectionGroup": "scores",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "elapsedTime",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
+        { "fieldPath": "score", "order": "DESCENDING" },
+        { "fieldPath": "elapsedTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weeklyScores.week1.score", "order": "DESCENDING" },
+        { "fieldPath": "weeklyScores.week1.elapsedTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weeklyScores.week2.score", "order": "DESCENDING" },
+        { "fieldPath": "weeklyScores.week2.elapsedTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weeklyScores.week3.score", "order": "DESCENDING" },
+        { "fieldPath": "weeklyScores.week3.elapsedTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "weeklyScores.week4.score", "order": "DESCENDING" },
+        { "fieldPath": "weeklyScores.week4.elapsedTime", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

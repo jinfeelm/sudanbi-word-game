@@ -111,3 +111,114 @@ exports.recordAttempt = onCall({ region: "asia-northeast3", cors: true }, async 
         throw new HttpsError("internal", "도전 횟수를 기록하는 중 오류가 발생했습니다.");
     }
 });
+
+/**
+ * 사용자의 주차별 점수를 기록하고 총점을 업데이트하는 함수
+ */
+exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new HttpsError("unauthenticated", "인증이 필요합니다.");
+    }
+
+    const { score, elapsedTime, week, nickname } = request.data;
+    if (typeof score !== 'number' || typeof elapsedTime !== 'number' || !week || !nickname) {
+        throw new HttpsError("invalid-argument", "필수 정보가 누락되었습니다.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const weekKey = `week${week}`;
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+
+            if (!userDoc.exists) {
+                // 새 사용자인 경우 문서 생성
+                const initialScores = {};
+                for (let i = 1; i <= 4; i++) {
+                    initialScores[`week${i}`] = { score: 0, elapsedTime: 0 };
+                }
+                initialScores[weekKey] = { score, elapsedTime };
+
+                transaction.set(userRef, {
+                    uid: uid,
+                    name: nickname,
+                    totalScore: score,
+                    weeklyScores: initialScores,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // 기존 사용자인 경우 점수 업데이트
+                const data = userDoc.data();
+                const currentWeeklyScores = data.weeklyScores || {};
+                const oldWeekScore = currentWeeklyScores[weekKey]?.score || 0;
+
+                // 새 점수가 해당 주차의 최고 점수인 경우에만 업데이트
+                if (score > oldWeekScore) {
+                    currentWeeklyScores[weekKey] = { score, elapsedTime };
+
+                    // totalScore 다시 계산
+                    const newTotalScore = Object.values(currentWeeklyScores).reduce((sum, s) => sum + s.score, 0);
+
+                    transaction.update(userRef, {
+                        weeklyScores: currentWeeklyScores,
+                        totalScore: newTotalScore,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
+        });
+        return { success: true, message: "점수가 성공적으로 기록되었습니다." };
+    } catch (error) {
+        console.error("Error updating score:", error);
+        throw new HttpsError("internal", "점수 기록 중 오류가 발생했습니다.");
+    }
+});
+
+/**
+ * 주간 랭킹을 가져오는 함수
+ */
+exports.getWeeklyLeaderboard = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
+    const { week } = request.data;
+    if (!week) {
+        throw new HttpsError("invalid-argument", "주차 정보가 필요합니다.");
+    }
+    const weekKey = `weeklyScores.week${week}`;
+
+    const snapshot = await db.collection("users")
+        .orderBy(`${weekKey}.score`, "desc")
+        .orderBy(`${weekKey}.elapsedTime`, "asc")
+        .limit(10)
+        .get();
+
+    const leaderboard = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            name: data.name,
+            score: data.weeklyScores[`week${week}`]?.score || 0,
+            elapsedTime: data.weeklyScores[`week${week}`]?.elapsedTime || 0,
+        };
+    });
+    return { leaderboard };
+});
+
+/**
+ * 누적 랭킹을 가져오는 함수
+ */
+exports.getTotalLeaderboard = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
+    const snapshot = await db.collection("users")
+        .orderBy("totalScore", "desc")
+        .limit(10)
+        .get();
+
+    const leaderboard = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            name: data.name,
+            score: data.totalScore
+            // 누적 랭킹에서는 elapsedTime을 표시하지 않거나, 다른 기준을 적용할 수 있습니다.
+        };
+    });
+    return { leaderboard };
+});
