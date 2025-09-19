@@ -166,6 +166,7 @@
         const getKakaoKey = functions.httpsCallable('getKakaoKey');
         const checkAttempts = functions.httpsCallable('checkAttempts');
         const recordAttempt = functions.httpsCallable('recordAttempt');
+        const markSharedToday = functions.httpsCallable('markSharedToday');
         // Functions for new ranking system will be called here
         const updateScore = functions.httpsCallable('updateScore');
         const getWeeklyLeaderboard = functions.httpsCallable('getWeeklyLeaderboard');
@@ -202,7 +203,6 @@
         let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime, currentChallengeInfo;
         let shuffledWords = [];
         let isAnswerable = true;
-        let isPollingForShare = false;
         
         let audioCtx;
         try {
@@ -475,19 +475,24 @@
                     Kakao.init(result.data.key);
                 } catch (error) { return showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.'); }
             }
+
+            let shareResult = null;
             if (isForChance) {
-                 const user = auth.currentUser;
-                 if(user) {
-                    try {
-                        await db.collection('attempts').doc(user.uid).update({ hasSharedToday: true });
-                        pollForShareSuccess(includeScore);
-                    } catch (error) {
-                        console.error("Error pre-updating share status:", error);
-                        showCustomAlert('공유 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
-                        return;
-                    }
+                const user = auth.currentUser;
+                if (!user) {
+                    showCustomAlert('공유 기회를 얻으려면 먼저 로그인해주세요.');
+                    return;
+                }
+                try {
+                    const response = await markSharedToday();
+                    shareResult = response.data;
+                } catch (error) {
+                    console.error("Error recording share status:", error);
+                    showCustomAlert('공유 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+                    return;
                 }
             }
+
             Kakao.Share.sendDefault({
                 objectType: 'feed',
                 content: {
@@ -498,26 +503,16 @@
                 },
                 buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}]
             });
-        }
 
-        function pollForShareSuccess(shouldSwitchToStart = false) {
-            if (isPollingForShare) return;
-            isPollingForShare = true;
-            let attempts = 0;
-            const maxAttempts = 10, pollInterval = 2000;
-            const intervalId = setInterval(async () => {
-                const user = auth.currentUser;
-                if (!user || attempts++ > maxAttempts) { clearInterval(intervalId); isPollingForShare = false; return; }
-                try {
-                    const attemptDoc = await db.collection('attempts').doc(user.uid).get();
-                    if (attemptDoc.exists && attemptDoc.data().hasSharedToday) {
-                        clearInterval(intervalId); isPollingForShare = false;
-                        showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
-                        await checkPlayChance();
-                        if (shouldSwitchToStart) switchScreen('start');
-                    }
-                } catch(e) { console.error("Polling error", e); clearInterval(intervalId); isPollingForShare = false; }
-            }, pollInterval);
+            if (isForChance && shareResult) {
+                if (shareResult.alreadyShared) {
+                    showCustomAlert('오늘은 이미 공유로 추가 기회를 받았습니다.');
+                } else {
+                    showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
+                }
+                await checkPlayChance();
+                if (includeScore) switchScreen('start');
+            }
         }
 
         function checkStoredNickname() {
