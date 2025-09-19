@@ -113,6 +113,47 @@ exports.recordAttempt = onCall({ region: "asia-northeast3", cors: true }, async 
 });
 
 /**
+ * 사용자가 오늘 공유했음을 기록하여 추가 기회를 부여하는 함수
+ */
+exports.markSharedToday = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new HttpsError("unauthenticated", "인증이 필요합니다.");
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const attemptDocRef = db.collection("attempts").doc(uid);
+
+    try {
+        const result = await db.runTransaction(async (transaction) => {
+            const attemptDoc = await transaction.get(attemptDocRef);
+
+            if (!attemptDoc.exists || attemptDoc.data().date !== today) {
+                transaction.set(attemptDocRef, {
+                    uid: uid,
+                    date: today,
+                    count: 0,
+                    hasSharedToday: true,
+                });
+                return { alreadyShared: false, resetForToday: true };
+            }
+
+            if (attemptDoc.data().hasSharedToday) {
+                return { alreadyShared: true, resetForToday: false };
+            }
+
+            transaction.update(attemptDocRef, { hasSharedToday: true });
+            return { alreadyShared: false, resetForToday: false };
+        });
+
+        return { success: true, ...result };
+    } catch (error) {
+        console.error("Error marking share:", error);
+        throw new HttpsError("internal", "공유 정보를 저장하는 중 오류가 발생했습니다.");
+    }
+});
+
+/**
  * 사용자의 주차별 점수를 기록하고 총점을 업데이트하는 함수
  */
 exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
