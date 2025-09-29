@@ -443,6 +443,14 @@
         
         function listenToLeaderboard() {
             if (unsubscribeLeaderboard) unsubscribeLeaderboard();
+
+            // [⭐️ 수정] 챌린지 시작 여부를 먼저 확인합니다.
+            const launchTime = new Date('2025-10-06T00:00:00+09:00');
+            if (new Date() < launchTime) {
+                ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">10월 6일 0시에<br>랭킹이 공개됩니다!</li>';
+                return; // 챌린지 시작 전이면, 데이터를 조회하지 않고 여기서 함수를 종료합니다.
+            }
+
             const leaderboardRef = db.collection("leaderboards").doc("summary");
             
             unsubscribeLeaderboard = leaderboardRef.onSnapshot(doc => {
@@ -685,14 +693,9 @@
                     else ui.emailFormContainer.style.display = 'block';
                 } catch (error) { console.error("Error checking email record:", error); }
                 
+                // [⭐️ 최종 수정] 아래 두 줄로 깔끔하게 정리합니다.
                 initializeApp();
-
-                const launchTime = new Date('2025-10-06T00:00:00+09:00');
-                if (new Date() > launchTime) {
-                    listenToLeaderboard();
-                } else {
-                    ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">10월 6일 0시에<br>랭킹이 공개됩니다!</li>';
-                }
+                listenToLeaderboard(); // 페이지 로드 시 랭킹 상태를 한 번 확인합니다.
 
             } else {
                 auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error));
