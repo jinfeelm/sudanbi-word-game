@@ -18,8 +18,8 @@
         .screen.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4), 0 4px 6px -2px rgba(118, 75, 162, 0.2); }
-        .btn-primary:disabled { background: #d1d5db; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4), 0 4px 6px -2px rgba(118, 75, 162, 0.2); }
+        .btn-primary:disabled { background: #d1d5db; color: #6b7280; cursor: not-allowed; transform: none; box-shadow: none; }
         .option-btn:hover { transform: scale(1.02); border-color: #764ba2; }
         .correct { animation: correct-answer 0.5s ease; background-color: #dcfce7 !important; border-color: #22c55e !important; }
         .incorrect { animation: incorrect-answer 0.5s ease; background-color: #fee2e2 !important; border-color: #ef4444 !important; }
@@ -85,8 +85,8 @@
             </div>
             
             <div id="start-button-container" class="w-full flex flex-col justify-center pt-4" style="min-height: 96px;">
-                <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary">
-                    도전 시작!
+                <button id="start-btn" class="w-full py-4 text-xl font-bold text-white rounded-lg btn-primary" disabled>
+                    잠시만 기다려주세요...
                 </button>
                 <button id="share-for-chance-btn" class="w-full py-4 text-xl font-bold bg-[#FEE500] text-[#191919] rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-transform duration-200 hidden flex items-center justify-center">
                     <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3C7.029 3 3 6.12 3 10.018C3 12.33 4.348 14.37 6.428 15.657L5.21 20.211C5.122 20.548 5.421 20.845 5.76 20.755L11.234 19.311C11.484 19.333 11.74 19.344 12 19.344C16.971 19.344 21 16.224 21 12.326C21 8.428 16.971 5.308 12 5.308C12 4.195 12 3 12 3Z" fill="#191919"/></svg>
@@ -166,11 +166,8 @@
         const getKakaoKey = functions.httpsCallable('getKakaoKey');
         const checkAttempts = functions.httpsCallable('checkAttempts');
         const recordAttempt = functions.httpsCallable('recordAttempt');
-        // Functions for new ranking system will be called here
         const updateScore = functions.httpsCallable('updateScore');
-        const getWeeklyLeaderboard = functions.httpsCallable('getWeeklyLeaderboard');
-        const getTotalLeaderboard = functions.httpsCallable('getTotalLeaderboard');
-
+        
         // UI Elements
         const ui = {
             screens: { start: document.getElementById('start-screen'), game: document.getElementById('game-screen'), end: document.getElementById('end-screen') },
@@ -192,7 +189,8 @@
             leaderboard: {
                 list: document.getElementById('leaderboard-list'),
                 weeklyBtn: document.getElementById('weekly-rank-btn'),
-                totalBtn: document.getElementById('total-rank-btn')
+                totalBtn: document.getElementById('total-rank-btn'),
+                activeTab: 'weekly' // Track current active tab
             },
             challengeWeekInfoEl: document.getElementById('challenge-week-info'),
             alertModal: { backdrop: document.getElementById('alert-modal-backdrop'), modal: document.getElementById('alert-modal'), message: document.getElementById('alert-modal-message'), closeBtn: document.getElementById('close-alert-modal-btn') }
@@ -202,7 +200,7 @@
         let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime, currentChallengeInfo;
         let shuffledWords = [];
         let isAnswerable = true;
-        let isPollingForShare = false;
+        let unsubscribeLeaderboard; // To detach listener
         
         let audioCtx;
         try {
@@ -298,12 +296,23 @@
                 await checkPlayChance();
             }
         }
-
+        
         async function getWordsForCurrentWeek() {
             const weekKey = `Week ${currentChallengeInfo.week}`;
+            const cachedWords = localStorage.getItem(`words_week_${currentChallengeInfo.week}`);
+            if(cachedWords) {
+                console.log("Loading words from cache.");
+                return JSON.parse(cachedWords);
+            }
+            
             try {
+                console.log("Fetching words from Firestore.");
                 const seasonDoc = await db.collection("seasons").doc("season1").get();
-                if (seasonDoc.exists) return seasonDoc.data()[weekKey] || [];
+                if (seasonDoc.exists) {
+                    const words = seasonDoc.data()[weekKey] || [];
+                    localStorage.setItem(`words_week_${currentChallengeInfo.week}`, JSON.stringify(words));
+                    return words;
+                }
                 return [];
             } catch (error) {
                 console.error("Error getting words: ", error);
@@ -369,12 +378,8 @@
             const user = auth.currentUser;
             if (user) {
                 try {
-                    await functions.httpsCallable('updateScore')({
-                        score: score,
-                        elapsedTime: elapsedTime,
-                        week: currentChallengeInfo.week,
-                        nickname: nickname
-                    });
+                    await updateScore({ score, elapsedTime, week: currentChallengeInfo.week, nickname });
+                    checkAndReflectNewRecord(score, nickname, elapsedTime);
                 } catch (error) {
                     console.error("Error saving score via function: ", error);
                     showCustomAlert('점수 저장에 실패했습니다.');
@@ -436,35 +441,88 @@
             });
         }
         
-        async function loadLeaderboard(type = 'weekly') {
-            ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">랭킹을 불러오는 중...</li>';
-            try {
-                let result;
-                if (type === 'weekly') {
-                    const getWeeklyData = functions.httpsCallable('getWeeklyLeaderboard');
-                    result = await getWeeklyData({ week: currentChallengeInfo.week });
-                } else { // total
-                    const getTotalData = functions.httpsCallable('getTotalLeaderboard');
-                    result = await getTotalData();
+        function listenToLeaderboard() {
+            if (unsubscribeLeaderboard) unsubscribeLeaderboard();
+            const leaderboardRef = db.collection("leaderboards").doc("summary");
+            
+            unsubscribeLeaderboard = leaderboardRef.onSnapshot(doc => {
+                if(doc.exists) {
+                    const data = doc.data();
+                    let scoresToShow;
+                    if(ui.leaderboard.activeTab === 'weekly') {
+                        const weekKey = `week${currentChallengeInfo.week}`;
+                        scoresToShow = data.weekly ? data.weekly[weekKey] : [];
+                    } else {
+                        scoresToShow = data.total || [];
+                    }
+                    displayLeaderboard(scoresToShow);
+                } else {
+                    ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">아직 랭킹 데이터가 없습니다.</li>';
                 }
-                displayLeaderboard(result.data.leaderboard);
-            } catch (error) {
-                console.error(`Error fetching ${type} leaderboard:`, error);
+            }, error => {
+                console.error("Error listening to leaderboard:", error);
                 ui.leaderboard.list.innerHTML = `<li class="text-center text-slate-400 p-4 text-red-500">랭킹을 불러오는 데 실패했습니다.</li>`;
-            }
+            });
         }
 
         function setupRankingTabs() {
             ui.leaderboard.weeklyBtn.addEventListener('click', () => {
+                ui.leaderboard.activeTab = 'weekly';
                 ui.leaderboard.weeklyBtn.classList.add('active');
                 ui.leaderboard.totalBtn.classList.remove('active');
-                loadLeaderboard('weekly');
+                listenToLeaderboard(); // Re-listen to apply filter
             });
             ui.leaderboard.totalBtn.addEventListener('click', () => {
+                ui.leaderboard.activeTab = 'total';
                 ui.leaderboard.weeklyBtn.classList.remove('active');
                 ui.leaderboard.totalBtn.classList.add('active');
-                loadLeaderboard('total');
+                listenToLeaderboard(); // Re-listen to apply filter
             });
+        }
+        
+        function checkAndReflectNewRecord(newScore, newName, newElapsedTime) {
+            const leaderboardList = ui.leaderboard.list;
+            const currentScores = Array.from(leaderboardList.querySelectorAll('li')).map(li => {
+                const scoreText = li.querySelector('.font-poppins')?.textContent || '0점';
+                return parseInt(scoreText.replace('점', ''));
+            });
+
+            if (!currentScores.some(s => !isNaN(s))) return;
+
+            const isNewHighScore = currentScores.length < 10 || newScore > currentScores[currentScores.length - 1];
+
+            if (isNewHighScore) {
+                const newRecordLi = document.createElement('li');
+                newRecordLi.className = 'flex items-center justify-between bg-purple-100 p-3 rounded-lg ring-2 ring-purple-500';
+                const timeDisplay = `<span class="text-xs text-slate-500 font-poppins">${(newElapsedTime / 1000).toFixed(2)}초</span>`;
+                newRecordLi.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="rank font-bold text-sm bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center mr-3">🎉</span>
+                        <span class="font-semibold text-purple-700">${newName}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="font-bold font-poppins text-purple-600">${newScore}점</span>
+                        ${timeDisplay}
+                    </div>
+                `;
+
+                let inserted = false;
+                for (let i = 0; i < leaderboardList.children.length; i++) {
+                    const currentScore = parseInt(leaderboardList.children[i].querySelector('.font-poppins').textContent.replace('점', ''));
+                    if (newScore > currentScore) {
+                        leaderboardList.insertBefore(newRecordLi, leaderboardList.children[i]);
+                        inserted = true;
+                        break;
+                    }
+                }
+                if (!inserted && leaderboardList.children.length < 10) {
+                    leaderboardList.appendChild(newRecordLi);
+                }
+
+                while (leaderboardList.children.length > 10) {
+                    leaderboardList.removeChild(leaderboardList.lastChild);
+                }
+            }
         }
 
         // --- User State & Sharing Logic ---
@@ -475,19 +533,14 @@
                     Kakao.init(result.data.key);
                 } catch (error) { return showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.'); }
             }
-            if (isForChance) {
-                 const user = auth.currentUser;
-                 if(user) {
-                    try {
-                        await db.collection('attempts').doc(user.uid).update({ hasSharedToday: true });
-                        pollForShareSuccess(includeScore);
-                    } catch (error) {
-                        console.error("Error pre-updating share status:", error);
-                        showCustomAlert('공유 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
-                        return;
-                    }
-                }
+            
+            const user = auth.currentUser;
+            if(isForChance && user) {
+                const todayStr = new Date().toISOString().split("T")[0];
+                const attemptDocRef = db.collection('attempts').doc(user.uid);
+                await attemptDocRef.set({ hasSharedToday: true, date: todayStr }, { merge: true });
             }
+
             Kakao.Share.sendDefault({
                 objectType: 'feed',
                 content: {
@@ -497,27 +550,15 @@
                     link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
                 },
                 buttons: [{ title: '게임하러 가기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href }}]
-            });
-        }
-
-        function pollForShareSuccess(shouldSwitchToStart = false) {
-            if (isPollingForShare) return;
-            isPollingForShare = true;
-            let attempts = 0;
-            const maxAttempts = 10, pollInterval = 2000;
-            const intervalId = setInterval(async () => {
-                const user = auth.currentUser;
-                if (!user || attempts++ > maxAttempts) { clearInterval(intervalId); isPollingForShare = false; return; }
-                try {
-                    const attemptDoc = await db.collection('attempts').doc(user.uid).get();
-                    if (attemptDoc.exists && attemptDoc.data().hasSharedToday) {
-                        clearInterval(intervalId); isPollingForShare = false;
-                        showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
-                        await checkPlayChance();
-                        if (shouldSwitchToStart) switchScreen('start');
+            }, (response) => {
+                if (isForChance) {
+                    showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
+                    checkPlayChance();
+                    if(document.getElementById('end-screen').classList.contains('active')){
+                         switchScreen('start');
                     }
-                } catch(e) { console.error("Polling error", e); clearInterval(intervalId); isPollingForShare = false; }
-            }, pollInterval);
+                }
+            });
         }
 
         function checkStoredNickname() {
@@ -581,11 +622,53 @@
         }
 
         // --- App Initialization ---
+        function handleLaunchCountdown() {
+            const launchTime = new Date('2025-10-06T00:00:00+09:00');
+            const startBtn = ui.startBtn;
+            let countdownInterval;
+
+            function updateCountdown() {
+                const now = new Date();
+                const timeLeft = launchTime - now;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    startBtn.disabled = false;
+                    startBtn.textContent = "도전 시작!";
+                    checkPlayChance();
+                    return;
+                }
+
+                startBtn.disabled = true;
+
+                const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+                let countdownText = "오픈까지 ";
+                if (days > 0) countdownText += `${days}일 `;
+                countdownText += `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                
+                startBtn.textContent = countdownText;
+            }
+
+            updateCountdown();
+            countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
         function initializeApp() {
+            handleLaunchCountdown();
             setChallengeWeekInfo();
             checkStoredNickname();
             setupRankingTabs();
-            ui.backToStartBtn.addEventListener('click', () => { switchScreen('start'); checkPlayChance(); });
+            ui.backToStartBtn.addEventListener('click', () => { 
+                switchScreen('start'); 
+                const launchTime = new Date('2025-10-06T00:00:00+09:00');
+                if (new Date() > launchTime) {
+                    checkPlayChance();
+                }
+            });
             ui.startBtn.addEventListener('click', initGame);
             ui.submitEmailBtn.addEventListener('click', submitEmail);
             ui.alertModal.closeBtn.addEventListener('click', closeCustomAlert);
@@ -601,9 +684,16 @@
                     if (emailDocSnap.exists) ui.emailFormContainer.style.display = 'none';
                     else ui.emailFormContainer.style.display = 'block';
                 } catch (error) { console.error("Error checking email record:", error); }
+                
                 initializeApp();
-                loadLeaderboard('weekly'); // Load initial leaderboard
-                await checkPlayChance();
+
+                const launchTime = new Date('2025-10-06T00:00:00+09:00');
+                if (new Date() > launchTime) {
+                    listenToLeaderboard();
+                } else {
+                    ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">10월 6일 0시에<br>랭킹이 공개됩니다!</li>';
+                }
+
             } else {
                 auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error));
             }
@@ -611,4 +701,3 @@
     </script>
 </body>
 </html>
-

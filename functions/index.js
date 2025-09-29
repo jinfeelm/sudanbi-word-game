@@ -1,4 +1,5 @@
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -12,7 +13,7 @@ exports.isNicknameAvailable = onCall({ region: "asia-northeast3", cors: true }, 
     if (!nickname || nickname.length < 2 || nickname.length > 10) {
         throw new HttpsError("invalid-argument", "닉네임은 2~10자 사이여야 합니다.");
     }
-    const snapshot = await db.collection("scores").where("name", "==", nickname).limit(1).get();
+    const snapshot = await db.collection("users").where("name", "==", nickname).limit(1).get();
     return { isAvailable: snapshot.empty };
 });
 
@@ -58,12 +59,10 @@ exports.checkAttempts = onCall({ region: "asia-northeast3", cors: true }, async 
         return { canPlay: true, reason: "First play of the day." };
     }
     
-    // playCount가 1일 때, 공유를 했다면 한 번 더 플레이 가능
     if (playCount === 1 && hasShared) {
         return { canPlay: true, reason: "Has an extra chance from sharing." };
     }
     
-    // playCount가 2 이상이거나, 1인데 공유를 안했다면 플레이 불가
     if (playCount >= 2) {
          return { canPlay: false, reason: "All chances used for today." };
     }
@@ -72,10 +71,8 @@ exports.checkAttempts = onCall({ region: "asia-northeast3", cors: true }, async 
         return { canPlay: false, reason: "Share to get another chance." };
     }
 
-    // 기본적으로는 플레이 불가
     return { canPlay: false, reason: "All chances used for today." };
 });
-
 
 /**
  * 사용자의 도전 횟수를 기록하는 함수
@@ -134,7 +131,6 @@ exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (r
             const userDoc = await transaction.get(userRef);
 
             if (!userDoc.exists) {
-                // 새 사용자인 경우 문서 생성
                 const initialScores = {};
                 for (let i = 1; i <= 4; i++) {
                     initialScores[`week${i}`] = { score: 0, elapsedTime: 0 };
@@ -149,17 +145,13 @@ exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (r
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             } else {
-                // 기존 사용자인 경우 점수 업데이트
                 const data = userDoc.data();
                 const currentWeeklyScores = data.weeklyScores || {};
                 const oldWeekScore = currentWeeklyScores[weekKey]?.score || 0;
 
-                // 새 점수가 해당 주차의 최고 점수인 경우에만 업데이트
                 if (score > oldWeekScore) {
                     currentWeeklyScores[weekKey] = { score, elapsedTime };
-
-                    // totalScore 다시 계산
-                    const newTotalScore = Object.values(currentWeeklyScores).reduce((sum, s) => sum + s.score, 0);
+                    const newTotalScore = Object.values(currentWeeklyScores).reduce((sum, s) => sum + (s.score || 0), 0);
 
                     transaction.update(userRef, {
                         weeklyScores: currentWeeklyScores,
@@ -176,49 +168,63 @@ exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (r
     }
 });
 
+
 /**
- * 주간 랭킹을 가져오는 함수
+ * [⭐️ NEW] 5분마다 랭킹 데이터를 집계하여 캐시 문서를 생성하는 스케줄링 함수
  */
-exports.getWeeklyLeaderboard = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
-    const { week } = request.data;
-    if (!week) {
-        throw new HttpsError("invalid-argument", "주차 정보가 필요합니다.");
+exports.updateLeaderboardsOnSchedule = onSchedule({
+    schedule: "every 5 minutes",
+    region: "asia-northeast3",
+    timeZone: "Asia/Seoul",
+}, async (event) => {
+    console.log("Running scheduled leaderboard update...");
+    const leaderboardRef = db.collection("leaderboards").doc("summary");
+
+    try {
+        // 누적 랭킹 집계
+        const totalSnapshot = await db.collection("users")
+            .orderBy("totalScore", "desc")
+            .limit(10)
+            .get();
+        const totalLeaderboard = totalSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                name: data.name,
+                score: data.totalScore,
+            };
+        });
+
+        // 주간 랭킹 집계 (예: 1주차부터 4주차까지)
+        const weeklyLeaderboards = {};
+        for (let week = 1; week <= 4; week++) {
+            const weekKey = `weeklyScores.week${week}`;
+            const weeklySnapshot = await db.collection("users")
+                .orderBy(`${weekKey}.score`, "desc")
+                .orderBy(`${weekKey}.elapsedTime`, "asc")
+                .limit(10)
+                .get();
+            weeklyLeaderboards[`week${week}`] = weeklySnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    name: data.name,
+                    score: data.weeklyScores[`week${week}`]?.score || 0,
+                    elapsedTime: data.weeklyScores[`week${week}`]?.elapsedTime || 0,
+                };
+            });
+        }
+        
+        // 하나의 문서에 모든 랭킹 데이터 저장 (비용 절감 핵심)
+        await leaderboardRef.set({
+            total: totalLeaderboard,
+            weekly: weeklyLeaderboards,
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        console.log("Successfully updated leaderboards.");
+        return null;
+
+    } catch (error) {
+        console.error("Error updating leaderboards:", error);
+        return null;
     }
-    const weekKey = `weeklyScores.week${week}`;
-
-    const snapshot = await db.collection("users")
-        .orderBy(`${weekKey}.score`, "desc")
-        .orderBy(`${weekKey}.elapsedTime`, "asc")
-        .limit(10)
-        .get();
-
-    const leaderboard = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            name: data.name,
-            score: data.weeklyScores[`week${week}`]?.score || 0,
-            elapsedTime: data.weeklyScores[`week${week}`]?.elapsedTime || 0,
-        };
-    });
-    return { leaderboard };
-});
-
-/**
- * 누적 랭킹을 가져오는 함수
- */
-exports.getTotalLeaderboard = onCall({ region: "asia-northeast3", cors: true }, async (request) => {
-    const snapshot = await db.collection("users")
-        .orderBy("totalScore", "desc")
-        .limit(10)
-        .get();
-
-    const leaderboard = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            name: data.name,
-            score: data.totalScore
-            // 누적 랭킹에서는 elapsedTime을 표시하지 않거나, 다른 기준을 적용할 수 있습니다.
-        };
-    });
-    return { leaderboard };
 });
