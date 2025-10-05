@@ -13,6 +13,7 @@ exports.isNicknameAvailable = onCall({ region: "asia-northeast3", cors: true }, 
     if (!nickname || nickname.length < 2 || nickname.length > 10) {
         throw new HttpsError("invalid-argument", "닉네임은 2~10자 사이여야 합니다.");
     }
+    // 🚑 FIX: 'scores'가 아닌 'users' 컬렉션을 보도록 수정
     const snapshot = await db.collection("users").where("name", "==", nickname).limit(1).get();
     return { isAvailable: snapshot.empty };
 });
@@ -151,7 +152,9 @@ exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (r
 
                 if (score > oldWeekScore) {
                     currentWeeklyScores[weekKey] = { score, elapsedTime };
-                    const newTotalScore = Object.values(currentWeeklyScores).reduce((sum, s) => sum + (s.score || 0), 0);
+                    
+                    // 🚑 FIX: 예상치 못한 데이터(null 등)가 있어도 오류가 나지 않도록 안정성 강화
+                    const newTotalScore = Object.values(currentWeeklyScores).reduce((sum, s) => sum + (s?.score || 0), 0);
 
                     transaction.update(userRef, {
                         weeklyScores: currentWeeklyScores,
@@ -170,7 +173,7 @@ exports.updateScore = onCall({ region: "asia-northeast3", cors: true }, async (r
 
 
 /**
- * [⭐️ NEW] 5분마다 랭킹 데이터를 집계하여 캐시 문서를 생성하는 스케줄링 함수
+ * 5분마다 랭킹 데이터를 집계하여 캐시 문서를 생성하는 스케줄링 함수
  */
 exports.updateLeaderboardsOnSchedule = onSchedule({
     schedule: "every 5 minutes",
@@ -181,20 +184,15 @@ exports.updateLeaderboardsOnSchedule = onSchedule({
     const leaderboardRef = db.collection("leaderboards").doc("summary");
 
     try {
-        // 누적 랭킹 집계
         const totalSnapshot = await db.collection("users")
             .orderBy("totalScore", "desc")
             .limit(10)
             .get();
-        const totalLeaderboard = totalSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                name: data.name,
-                score: data.totalScore,
-            };
-        });
+        const totalLeaderboard = totalSnapshot.docs.map(doc => ({
+            name: doc.data().name,
+            score: doc.data().totalScore,
+        }));
 
-        // 주간 랭킹 집계 (예: 1주차부터 4주차까지)
         const weeklyLeaderboards = {};
         for (let week = 1; week <= 4; week++) {
             const weekKey = `weeklyScores.week${week}`;
@@ -213,7 +211,6 @@ exports.updateLeaderboardsOnSchedule = onSchedule({
             });
         }
         
-        // 하나의 문서에 모든 랭킹 데이터 저장 (비용 절감 핵심)
         await leaderboardRef.set({
             total: totalLeaderboard,
             weekly: weeklyLeaderboards,
