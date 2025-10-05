@@ -39,6 +39,7 @@
         .reward-tooltip { visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 0.875rem; line-height: 1.25rem; }
         .reward-tooltip-container:hover .reward-tooltip { visibility: visible; opacity: 1; }
         .reward-icon { cursor: help; }
+        .my-record-highlight { background-color: #ede9fe !important; ring: 2px; ring-color: #8b5cf6; }
     </style>
 </head>
 <body class="bg-slate-50 flex items-center justify-center min-h-screen p-2 sm:p-4">
@@ -190,7 +191,7 @@
                 list: document.getElementById('leaderboard-list'),
                 weeklyBtn: document.getElementById('weekly-rank-btn'),
                 totalBtn: document.getElementById('total-rank-btn'),
-                activeTab: 'weekly' // Track current active tab
+                activeTab: 'weekly'
             },
             challengeWeekInfoEl: document.getElementById('challenge-week-info'),
             alertModal: { backdrop: document.getElementById('alert-modal-backdrop'), modal: document.getElementById('alert-modal'), message: document.getElementById('alert-modal-message'), closeBtn: document.getElementById('close-alert-modal-btn') }
@@ -200,12 +201,10 @@
         let score, timer, timerInterval, currentWordIndex, nickname, gameStartTime, currentChallengeInfo;
         let shuffledWords = [];
         let isAnswerable = true;
-        let unsubscribeLeaderboard; // To detach listener
+        let unsubscribeLeaderboard;
         
         let audioCtx;
-        try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) { console.warn('Web Audio API is not supported in this browser'); }
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { console.warn('Web Audio API is not supported in this browser'); }
 
         // --- Core Functions ---
         function playSound(type) { if (!audioCtx) return; const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); g.gain.setValueAtTime(0, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.01); if (type === 'correct') { o.type = 'sine'; o.frequency.setValueAtTime(600, audioCtx.currentTime); } else { o.type = 'square'; o.frequency.setValueAtTime(200, audioCtx.currentTime); } o.start(audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.2); o.stop(audioCtx.currentTime + 0.2); }
@@ -269,14 +268,12 @@
                 const attemptResult = await checkAttempts();
                 if (!attemptResult.data.canPlay) {
                     showCustomAlert('오늘은 더 이상 도전할 수 없어요! 내일 다시 만나요.');
-                    await checkPlayChance();
-                    return;
+                    await checkPlayChance(); return;
                 }
             } catch (error) {
                 console.error("Error checking attempts:", error);
                 showCustomAlert('도전 기회 확인 중 오류가 발생했습니다.');
-                ui.startBtn.disabled = false; ui.startBtn.textContent = '도전 시작!';
-                return;
+                ui.startBtn.disabled = false; ui.startBtn.textContent = '도전 시작!'; return;
             }
             try {
                 ui.startBtn.textContent = '게임 시작 중...';
@@ -300,13 +297,8 @@
         async function getWordsForCurrentWeek() {
             const weekKey = `Week ${currentChallengeInfo.week}`;
             const cachedWords = localStorage.getItem(`words_week_${currentChallengeInfo.week}`);
-            if(cachedWords) {
-                console.log("Loading words from cache.");
-                return JSON.parse(cachedWords);
-            }
-            
+            if(cachedWords) return JSON.parse(cachedWords);
             try {
-                console.log("Fetching words from Firestore.");
                 const seasonDoc = await db.collection("seasons").doc("season1").get();
                 if (seasonDoc.exists) {
                     const words = seasonDoc.data()[weekKey] || [];
@@ -314,10 +306,7 @@
                     return words;
                 }
                 return [];
-            } catch (error) {
-                console.error("Error getting words: ", error);
-                throw new Error("단어 목록을 불러오는 데 실패했습니다.");
-            }
+            } catch (error) { console.error("Error getting words: ", error); throw new Error("단어 목록을 불러오는 데 실패했습니다."); }
         }
 
         function startTimer() {
@@ -379,7 +368,7 @@
             if (user) {
                 try {
                     await updateScore({ score, elapsedTime, week: currentChallengeInfo.week, nickname });
-                    checkAndReflectNewRecord(score, nickname, elapsedTime);
+                    saveMyBestScore(score, elapsedTime); // 내 최고 기록을 브라우저에 저장
                 } catch (error) {
                     console.error("Error saving score via function: ", error);
                     showCustomAlert('점수 저장에 실패했습니다.');
@@ -408,24 +397,60 @@
                 if (error.code === 'permission-denied') {
                     showCustomAlert('이미 이벤트에 참여하셨습니다!');
                     ui.emailFormContainer.style.display = 'none';
-                } else {
-                    showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.');
-                }
+                } else { showCustomAlert('이메일 제출에 실패했습니다. 다시 시도해주세요.'); }
             } finally {
                 ui.submitEmailBtn.disabled = false; ui.submitEmailBtn.textContent = '이벤트 참여 및 소식 받기';
             }
         }
         
-        // --- Leaderboard Logic ---
+        // --- ⭐️ 개선된 랭킹 표시 로직 ---
+        function saveMyBestScore(newScore, newElapsedTime) {
+            const weekKey = `myBest_week_${currentChallengeInfo.week}`;
+            const myBest = JSON.parse(localStorage.getItem(weekKey) || '{}');
+            if (!myBest.score || newScore > myBest.score) {
+                localStorage.setItem(weekKey, JSON.stringify({ score: newScore, elapsedTime: newElapsedTime, name: nickname }));
+            }
+        }
+
         function displayLeaderboard(scores) {
+            let processedScores = [...(scores || [])];
+            const isWeeklyTab = ui.leaderboard.activeTab === 'weekly';
+            
+            if (isWeeklyTab && nickname) {
+                const weekKey = `myBest_week_${currentChallengeInfo.week}`;
+                const myBest = JSON.parse(localStorage.getItem(weekKey) || 'null');
+
+                if (myBest) {
+                    const myIndexOnServerList = processedScores.findIndex(s => s.name === myBest.name);
+                    
+                    if (myIndexOnServerList > -1) {
+                        if (myBest.score > processedScores[myIndexOnServerList].score) {
+                            processedScores[myIndexOnServerList] = myBest;
+                        }
+                    } else {
+                        if(processedScores.length < 10 || myBest.score > processedScores[processedScores.length-1].score) {
+                            processedScores.push(myBest);
+                        }
+                    }
+                }
+            }
+            
+            processedScores.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return (a.elapsedTime || 0) - (b.elapsedTime || 0);
+            });
+            if (processedScores.length > 10) processedScores.length = 10;
+
             ui.leaderboard.list.innerHTML = '';
-            if (!scores || scores.length === 0) {
+            if (processedScores.length === 0) {
                 ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">아직 등록된 점수가 없어요.<br>첫 번째 챔피언이 되어보세요!</li>';
                 return;
             }
-            scores.forEach((data, index) => {
+
+            processedScores.forEach((data, index) => {
                 const li = document.createElement('li');
-                li.className = 'flex items-center justify-between bg-slate-100 p-3 rounded-lg';
+                const isMyRecord = data.name === nickname;
+                li.className = `flex items-center justify-between bg-slate-100 p-3 rounded-lg ${isMyRecord ? 'my-record-highlight' : ''}`;
                 const timeDisplay = data.elapsedTime ? `<span class="text-xs text-slate-500 font-poppins">${(data.elapsedTime / 1000).toFixed(2)}초</span>` : '';
                 li.innerHTML = `
                     <div class="flex items-center">
@@ -443,14 +468,6 @@
         
         function listenToLeaderboard() {
             if (unsubscribeLeaderboard) unsubscribeLeaderboard();
-
-            // [⭐️ 수정] 챌린지 시작 여부를 먼저 확인합니다.
-            const launchTime = new Date('2025-10-06T00:00:00+09:00');
-            if (new Date() < launchTime) {
-                ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">10월 6일 0시에<br>랭킹이 공개됩니다!</li>';
-                return; // 챌린지 시작 전이면, 데이터를 조회하지 않고 여기서 함수를 종료합니다.
-            }
-
             const leaderboardRef = db.collection("leaderboards").doc("summary");
             
             unsubscribeLeaderboard = leaderboardRef.onSnapshot(doc => {
@@ -465,7 +482,7 @@
                     }
                     displayLeaderboard(scoresToShow);
                 } else {
-                    ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">아직 랭킹 데이터가 없습니다.</li>';
+                    displayLeaderboard([]);
                 }
             }, error => {
                 console.error("Error listening to leaderboard:", error);
@@ -478,59 +495,14 @@
                 ui.leaderboard.activeTab = 'weekly';
                 ui.leaderboard.weeklyBtn.classList.add('active');
                 ui.leaderboard.totalBtn.classList.remove('active');
-                listenToLeaderboard(); // Re-listen to apply filter
+                listenToLeaderboard();
             });
             ui.leaderboard.totalBtn.addEventListener('click', () => {
                 ui.leaderboard.activeTab = 'total';
                 ui.leaderboard.weeklyBtn.classList.remove('active');
                 ui.leaderboard.totalBtn.classList.add('active');
-                listenToLeaderboard(); // Re-listen to apply filter
+                listenToLeaderboard();
             });
-        }
-        
-        function checkAndReflectNewRecord(newScore, newName, newElapsedTime) {
-            const leaderboardList = ui.leaderboard.list;
-            const currentScores = Array.from(leaderboardList.querySelectorAll('li')).map(li => {
-                const scoreText = li.querySelector('.font-poppins')?.textContent || '0점';
-                return parseInt(scoreText.replace('점', ''));
-            });
-
-            if (!currentScores.some(s => !isNaN(s))) return;
-
-            const isNewHighScore = currentScores.length < 10 || newScore > currentScores[currentScores.length - 1];
-
-            if (isNewHighScore) {
-                const newRecordLi = document.createElement('li');
-                newRecordLi.className = 'flex items-center justify-between bg-purple-100 p-3 rounded-lg ring-2 ring-purple-500';
-                const timeDisplay = `<span class="text-xs text-slate-500 font-poppins">${(newElapsedTime / 1000).toFixed(2)}초</span>`;
-                newRecordLi.innerHTML = `
-                    <div class="flex items-center">
-                        <span class="rank font-bold text-sm bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center mr-3">🎉</span>
-                        <span class="font-semibold text-purple-700">${newName}</span>
-                    </div>
-                    <div class="text-right">
-                        <span class="font-bold font-poppins text-purple-600">${newScore}점</span>
-                        ${timeDisplay}
-                    </div>
-                `;
-
-                let inserted = false;
-                for (let i = 0; i < leaderboardList.children.length; i++) {
-                    const currentScore = parseInt(leaderboardList.children[i].querySelector('.font-poppins').textContent.replace('점', ''));
-                    if (newScore > currentScore) {
-                        leaderboardList.insertBefore(newRecordLi, leaderboardList.children[i]);
-                        inserted = true;
-                        break;
-                    }
-                }
-                if (!inserted && leaderboardList.children.length < 10) {
-                    leaderboardList.appendChild(newRecordLi);
-                }
-
-                while (leaderboardList.children.length > 10) {
-                    leaderboardList.removeChild(leaderboardList.lastChild);
-                }
-            }
         }
 
         // --- User State & Sharing Logic ---
@@ -541,14 +513,12 @@
                     Kakao.init(result.data.key);
                 } catch (error) { return showCustomAlert('공유 기능을 준비하는 중 오류가 발생했습니다.'); }
             }
-            
             const user = auth.currentUser;
             if(isForChance && user) {
                 const todayStr = new Date().toISOString().split("T")[0];
                 const attemptDocRef = db.collection('attempts').doc(user.uid);
                 await attemptDocRef.set({ hasSharedToday: true, date: todayStr }, { merge: true });
             }
-
             Kakao.Share.sendDefault({
                 objectType: 'feed',
                 content: {
@@ -562,9 +532,7 @@
                 if (isForChance) {
                     showCustomAlert('공유 완료! 추가 도전 기회를 얻었습니다.');
                     checkPlayChance();
-                    if(document.getElementById('end-screen').classList.contains('active')){
-                         switchScreen('start');
-                    }
+                    if(document.getElementById('end-screen').classList.contains('active')) switchScreen('start');
                 }
             });
         }
@@ -634,33 +602,25 @@
             const launchTime = new Date('2025-10-06T00:00:00+09:00');
             const startBtn = ui.startBtn;
             let countdownInterval;
-
             function updateCountdown() {
                 const now = new Date();
                 const timeLeft = launchTime - now;
-
                 if (timeLeft <= 0) {
                     clearInterval(countdownInterval);
                     startBtn.disabled = false;
                     startBtn.textContent = "도전 시작!";
-                    checkPlayChance();
-                    return;
+                    checkPlayChance(); return;
                 }
-
                 startBtn.disabled = true;
-
                 const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
                 let countdownText = "오픈까지 ";
                 if (days > 0) countdownText += `${days}일 `;
                 countdownText += `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                
                 startBtn.textContent = countdownText;
             }
-
             updateCountdown();
             countdownInterval = setInterval(updateCountdown, 1000);
         }
@@ -673,9 +633,7 @@
             ui.backToStartBtn.addEventListener('click', () => { 
                 switchScreen('start'); 
                 const launchTime = new Date('2025-10-06T00:00:00+09:00');
-                if (new Date() > launchTime) {
-                    checkPlayChance();
-                }
+                if (new Date() > launchTime) checkPlayChance();
             });
             ui.startBtn.addEventListener('click', initGame);
             ui.submitEmailBtn.addEventListener('click', submitEmail);
@@ -693,9 +651,14 @@
                     else ui.emailFormContainer.style.display = 'block';
                 } catch (error) { console.error("Error checking email record:", error); }
                 
-                // [⭐️ 최종 수정] 아래 두 줄로 깔끔하게 정리합니다.
                 initializeApp();
-                listenToLeaderboard(); // 페이지 로드 시 랭킹 상태를 한 번 확인합니다.
+
+                const launchTime = new Date('2025-10-06T00:00:00+09:00');
+                if (new Date() > launchTime) {
+                    listenToLeaderboard();
+                } else {
+                    ui.leaderboard.list.innerHTML = '<li class="text-center text-slate-400 p-4">10월 6일 0시에<br>랭킹이 공개됩니다!</li>';
+                }
 
             } else {
                 auth.signInAnonymously().catch((error) => console.error("Anonymous sign-in failed:", error));
