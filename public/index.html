@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2026 수단비 단어 챌린지</title>
+    <!-- 🔥 파비콘 오류 해결: 이모지 아이콘 적용 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔥</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    
+    <style>
+        /* --- 🎨 NEW DESIGN: Neon & Dark --- */
+        :root { 
+            --neon-lime: #D9F99D; 
+            --neon-green: #a3e635;
+            --neon-purple: #c084fc;
+            --bg-dark: #0f172a;
+        }
+        body { 
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: #000; 
+            color: white; 
+            touch-action: manipulation;
+            /* 힙합 클럽/게임장 느낌 배경 */
+            background-image: radial-gradient(circle at 50% 0%, #2e1065 0%, #000000 70%);
+        }
+
+        /* 화면 전환 효과 */
+        .screen { display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
+        .screen.active { display: flex; opacity: 1; }
+
+        /* 🔥 메인 버튼: 네온 글로우 효과 */
+        .btn-neon {
+            background: #a3e635; /* Lime-400 */
+            color: #000;
+            font-weight: 900;
+            border: none;
+            box-shadow: 0 0 15px rgba(163, 230, 53, 0.6);
+            transform: skew(-5deg); /* 살짝 기울여서 스피디하게 */
+            transition: all 0.1s;
+        }
+        .btn-neon:active { transform: skew(-5deg) scale(0.98); box-shadow: 0 0 5px rgba(163, 230, 53, 0.4); }
+        .btn-neon:disabled { background: #334155; color: #64748b; box-shadow: none; cursor: not-allowed; }
+        
+        /* 텍스트 스타일 */
+        .btn-text-fix { transform: skew(5deg); display: inline-block; } /* 버튼 텍스트는 다시 정방향으로 */
+
+        /* 선택지 버튼 */
+        .option-btn {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            transition: all 0.15s;
+        }
+        .option-btn:active { background-color: rgba(255, 255, 255, 0.2); }
+        .option-btn.correct { 
+            background-color: rgba(163, 230, 53, 0.9) !important; /* Lime */
+            border-color: #a3e635 !important; 
+            color: black !important; 
+            box-shadow: 0 0 20px rgba(163, 230, 53, 0.5);
+            font-weight: 800;
+        }
+        .option-btn.wrong { 
+            background-color: rgba(239, 68, 68, 0.9) !important; /* Red */
+            border-color: #ef4444 !important; 
+            color: white !important;
+            animation: shake 0.4s; 
+        }
+
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        /* 랭킹 리스트: 스포티한 디자인 */
+        .rank-item { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .rank-item:last-child { border-bottom: none; }
+        .rank-badge { font-family: 'Pretendard'; font-weight: 900; font-style: italic; }
+        
+        .rank-1 { color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.5); font-size: 1.2rem; } /* Gold */
+        .rank-2 { color: #cbd5e1; } /* Silver */
+        .rank-3 { color: #b45309; } /* Bronze */
+        
+        .my-record { background: linear-gradient(90deg, rgba(163, 230, 53, 0.1), transparent); border-left: 4px solid #a3e635; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-0 sm:p-4 overflow-hidden">
+
+    <div class="w-full h-screen sm:h-auto sm:max-h-[850px] max-w-md mx-auto flex flex-col relative bg-black/30 sm:rounded-2xl sm:border sm:border-white/10 sm:backdrop-blur-xl">
+        
+        <!-- 상단 헤더: 베타/정식 구분 배너 -->
+        <div id="season-banner" class="w-full text-center py-2 text-[10px] font-bold tracking-widest uppercase bg-slate-800 text-slate-400">
+            LOADING...
+        </div>
+
+        <div class="text-center pt-6 pb-2 shrink-0 px-6">
+            <h1 class="text-4xl font-black italic tracking-tighter text-white drop-shadow-lg mb-1">
+                <span class="text-lime-400">수단비 단어 챌린지</span> <br> S2
+            </h1>
+            <p class="text-xs text-slate-400 font-medium">영단어 만점에 도전하세요!</p>
+        </div>
+
+        <!-- [화면 1] 시작 화면 -->
+        <div id="start-screen" class="screen active flex-col flex-grow px-6 pb-8 overflow-hidden">
+            
+            <!-- 주차 정보 -->
+            <div class="mt-2 mb-6 text-center">
+                <div class="inline-block px-4 py-1 rounded-full border border-purple-500/50 bg-purple-900/20 text-purple-300 text-xs font-bold">
+                    <span id="season-week">Week ?</span>
+                </div>
+                <p id="season-date" class="text-[10px] text-slate-500 mt-1">...</p>
+            </div>
+
+            <!-- 닉네임 입력 -->
+            <div class="mb-6 shrink-0 relative">
+                <input type="text" id="nickname-input" placeholder="닉네임 입력" maxlength="8" 
+                    class="w-full bg-slate-900/80 border-2 border-slate-700 rounded-xl p-4 text-center text-white placeholder-slate-600 focus:outline-none focus:border-lime-400 focus:bg-slate-900 transition font-bold text-lg">
+                <p class="text-[10px] text-slate-500 text-center mt-2">* 순위표에 이 이름으로 올라갑니다.</p>
+            </div>
+
+            <!-- 랭킹 영역 -->
+            <div class="flex-grow flex flex-col overflow-hidden mb-6 bg-slate-900/50 rounded-xl border border-white/5 relative">
+                <div class="flex border-b border-white/5 shrink-0">
+                    <button id="rank-tab-weekly" class="flex-1 py-3 text-xs font-bold text-lime-400 border-b-2 border-lime-400 bg-white/5">주간 랭킹</button>
+                    <button id="rank-tab-total" class="flex-1 py-3 text-xs text-slate-500 hover:text-white transition">전체 랭킹</button>
+                </div>
+                <div id="ranking-list" class="flex-grow overflow-y-auto p-0 scrollbar-hide">
+                    <p class="text-center text-slate-600 text-xs mt-10">데이터 로딩 중...</p>
+                </div>
+            </div>
+
+            <!-- 하단 버튼 -->
+            <div class="shrink-0 space-y-3">
+                <button id="start-btn" class="w-full py-4 text-xl rounded-xl btn-neon relative overflow-hidden group">
+                    <span class="btn-text-fix">GAME START ▶</span>
+                    <!-- 빛나는 효과 -->
+                    <div class="absolute top-0 left-[-100%] w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-[-20deg] animate-shine"></div>
+                </button>
+                
+                <button id="share-chance-btn" class="w-full py-4 bg-[#FEE500] text-black font-bold rounded-xl hidden items-center justify-center shadow-lg">
+                    <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 3.185-9 7.118 0 2.55 1.706 4.8 4.27 6.05L6.05 19.8c-.08.31.25.57.53.43l5.5-3.32c5.98.56 9.92-3.8 9.92-8.79C22 6.185 17.97 3 12 3z"/></svg>
+                    공유하고 한 번 더하기 (1회 추가)
+                </button>
+            </div>
+        </div>
+
+        <!-- [화면 2] 게임 화면 -->
+        <div id="game-screen" class="screen flex-col flex-grow px-6 pb-10 pt-4">
+            <!-- HUD (Head Up Display) -->
+            <div class="flex justify-between items-end mb-2">
+                <div class="bg-slate-900/80 px-4 py-2 rounded-lg border border-slate-700">
+                    <span class="text-[10px] text-slate-400 block font-bold">SCORE</span>
+                    <span id="score-display" class="text-2xl font-black text-lime-400 italic">0</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] text-slate-400 block font-bold mb-1">TIME</span>
+                    <span id="timer-display" class="text-4xl font-black text-white italic tracking-tighter tabular-nums">20</span>
+                </div>
+            </div>
+            
+            <!-- 타이머 바 -->
+            <div class="w-full bg-slate-800 h-3 rounded-full mb-8 overflow-hidden border border-slate-700">
+                <div id="time-bar" class="h-full bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.8)] transition-all duration-100 ease-linear" style="width: 100%;"></div>
+            </div>
+
+            <!-- 문제 표시 -->
+            <div class="flex-grow flex flex-col items-center justify-center relative z-10">
+                <div class="mb-12 text-center w-full">
+                    <div id="freq-badge" class="inline-block mb-3 px-3 py-1 rounded-full bg-purple-600/30 border border-purple-500 text-purple-200 text-xs font-bold opacity-0 transition-opacity">
+                        🔥 수능 기출 0회
+                    </div>
+                    <h2 id="word-display" class="text-5xl sm:text-6xl font-black text-white drop-shadow-2xl tracking-tight break-words">Ready</h2>
+                </div>
+                
+                <div id="options-container" class="w-full space-y-3">
+                    <!-- 버튼 자동 생성 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- [화면 3] 결과 화면 -->
+        <div id="end-screen" class="screen flex-col flex-grow p-8 items-center justify-center text-center relative">
+            <!-- 배경 효과 -->
+            <div class="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/10 to-transparent pointer-events-none"></div>
+
+            <div class="relative z-10 w-full mb-8">
+                <p class="text-slate-400 text-xs font-bold tracking-[0.3em] mb-2">RESULT</p>
+                <h2 class="text-3xl font-black italic text-white mb-6">최종 성적표</h2>
+
+                <div class="bg-slate-900/80 border border-white/10 w-full p-8 rounded-2xl backdrop-blur-md shadow-2xl">
+                    <p class="text-slate-400 text-xs font-bold mb-2">SCORE</p>
+                    <p id="final-score" class="text-7xl font-black text-lime-400 italic tracking-tighter mb-4 drop-shadow-[0_0_15px_rgba(163,230,53,0.4)]">0</p>
+                    <div id="result-badge" class="inline-block px-4 py-1 bg-white/10 rounded text-sm font-bold text-white">
+                        Rank C
+                    </div>
+                </div>
+            </div>
+
+            <!-- 이메일 입력 -->
+            <div id="email-section" class="w-full mb-6 bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                <p class="text-sm font-bold text-lime-400 mb-1">🎁 랭커 도전?</p>
+                <p class="text-[10px] text-slate-400 mb-3">랭킹 1등에게는 상품을 드립니다. 연락처를 남겨 주세요.</p>
+                <div class="flex gap-2">
+                    <input type="email" id="email-input" placeholder="이메일 입력" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-lime-400 outline-none">
+                    <button id="email-submit-btn" class="bg-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-600 transition">등록</button>
+                </div>
+            </div>
+
+            <div class="flex w-full gap-3 mt-auto relative z-10">
+                <button id="share-result-btn" class="flex-1 py-4 bg-[#FEE500] text-black font-bold rounded-xl shadow-lg text-sm transition hover:scale-105">
+                    자랑하기 (공유)
+                </button>
+                <button id="retry-btn" class="flex-1 py-4 bg-white/10 text-white font-bold rounded-xl border border-white/10 hover:bg-white/20 text-sm transition hover:scale-105">
+                    다시 도전
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 팝업 -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center px-4 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+            <p id="modal-msg" class="text-md text-white font-bold mb-6 break-keep leading-relaxed"></p>
+            <button onclick="closeModal()" class="w-full py-3 bg-lime-400 text-black font-bold rounded-xl hover:brightness-110 transition">확인</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="/__/firebase/9.23.0/firebase-app-compat.js"></script>
+    <script src="/__/firebase/9.23.0/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+
+    <script>
+        // 🔥 카카오 키 (진규님 키로 꼭 교체하세요!)
+        const KAKAO_KEY = "3b220ecf82039d6604c6a42308e4dd1a";
+
+        // 🔥 [핵심] 일정 관리 (베타 vs 정식)
+        const OFFICIAL_OPEN_DATE = new Date('2026-01-19T00:00:00+09:00'); // 1월 19일 0시 오픈
+        const isBeta = new Date() < OFFICIAL_OPEN_DATE; // 현재 시간이 오픈 전이면 True
+
+        const CONFIG = {
+            seasonId: 'season2', // 단어 데이터는 공유
+            // 베타 기간엔 _beta 컬렉션 사용, 정식 오픈하면 _season2 컬렉션 사용 (자동 전환)
+            userCol: isBeta ? 'users_beta' : 'users_season2',
+            attemptCol: isBeta ? 'attempts_beta' : 'attempts_season2',
+            emailCol: isBeta ? 'emails_beta' : 'emails_season2',
+            
+            // 일정
+            startDate: '2026-01-05T00:00:00+09:00', // 1주차 시작일 (고정)
+            
+            // 게임 밸런스
+            maxTime: 60, initTime: 20, bonusTime: 2
+        };
+
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        let gameState = { score: 0, timeLeft: CONFIG.initTime, timerId: null, words: [], currentIndex: 0, nickname: localStorage.getItem('sudanbi_nickname') || '', week: 1, isPlayable: true };
+
+        const $ = (id) => document.getElementById(id);
+        const showScreen = (id) => { document.querySelectorAll('.screen').forEach(el => el.classList.remove('active')); $(id).classList.add('active'); };
+        const showModal = (msg) => { $('modal-msg').innerHTML = msg.replace(/\n/g, '<br>'); $('modal-backdrop').classList.remove('hidden'); };
+        window.closeModal = () => { $('modal-backdrop').classList.add('hidden'); };
+
+        // 📅 주차 및 배너 설정
+        function initSeasonDisplay() {
+            const start = new Date(CONFIG.startDate);
+            const now = new Date();
+            const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+            
+            let week = Math.floor(diffDays / 7) + 1;
+            if (week < 1) week = 1; if (week > 8) week = 8;
+            
+            gameState.week = week;
+            
+            const weekStart = new Date(start); weekStart.setDate(start.getDate() + (week-1)*7);
+            const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+            const dateStr = `${weekStart.getMonth()+1}.${weekStart.getDate()} ~ ${weekEnd.getMonth()+1}.${weekEnd.getDate()}`;
+
+            $('season-week').textContent = `WEEK ${week}`;
+            $('season-date').textContent = dateStr;
+
+            // 배너 설정
+            const banner = $('season-banner');
+            if (isBeta) {
+                banner.textContent = "🚧 프리시즌(BETA) 진행 중 (기록은 1/19 초기화됩니다)";
+                banner.className = "w-full text-center py-2 text-[10px] font-bold bg-purple-900/50 text-purple-200 border-b border-purple-500/30";
+            } else {
+                banner.textContent = "🏆 GRAND OPEN! 수단비 챌린지 정규 시즌 시작";
+                banner.className = "w-full text-center py-2 text-[10px] font-bold bg-lime-900/50 text-lime-400 border-b border-lime-500/30";
+            }
+        }
+
+        async function initApp() {
+            if (KAKAO_KEY && KAKAO_KEY !== "3b220ecf82039d6604c6a42308e4dd1a" && !Kakao.isInitialized()) Kakao.init(KAKAO_KEY);
+            initSeasonDisplay();
+
+            if (gameState.nickname) { 
+                $('nickname-input').value = gameState.nickname; 
+                $('nickname-input').disabled = true; 
+                $('nickname-input').classList.add('opacity-50', 'bg-slate-800'); 
+            }
+            loadLeaderboard('weekly');
+            
+            $('start-btn').onclick = tryStartGame;
+            $('share-chance-btn').onclick = () => shareKakao(true);
+            $('rank-tab-weekly').onclick = () => loadLeaderboard('weekly');
+            $('rank-tab-total').onclick = () => loadLeaderboard('total');
+            $('email-submit-btn').onclick = submitEmail;
+            $('share-result-btn').onclick = () => shareKakao(false);
+            $('retry-btn').onclick = () => location.reload();
+        }
+
+        async function tryStartGame() {
+            const nickname = $('nickname-input').value.trim();
+            if (nickname.length < 2) return showModal('닉네임(본명)을\n2자 이상 입력해주세요.');
+            
+            $('start-btn').disabled = true; 
+            $('start-btn').querySelector('span').textContent = 'Loading...';
+
+            try {
+                // 1. 닉네임 체크
+                if (!gameState.nickname) {
+                    const snap = await db.collection(CONFIG.userCol).where('name', '==', nickname).get();
+                    if (!snap.empty) throw new Error('이미 사용 중인 이름입니다.\n다른 이름을 써주세요.');
+                    localStorage.setItem('sudanbi_nickname', nickname);
+                    gameState.nickname = nickname;
+                }
+                // 2. 기회 체크
+                const user = auth.currentUser;
+                const today = new Date().toISOString().split("T")[0];
+                const doc = await db.collection(CONFIG.attemptCol).doc(user.uid).get();
+                let canPlay = true;
+                if (doc.exists && doc.data().date === today) {
+                    const d = doc.data();
+                    if (d.count >= 1 && !d.hasSharedToday) canPlay = false;
+                    else if (d.count >= 2) { canPlay = false; showModal('오늘의 기회를 다 썼어요!\n내일 또 만나요.'); return; }
+                    
+                    if (!canPlay) {
+                        $('start-btn').classList.add('hidden');
+                        $('share-chance-btn').classList.remove('hidden');
+                        return showModal('앗! 기회 소진 😱\n친구에게 공유하면 한 번 더!');
+                    }
+                }
+                await loadWordsAndStart();
+            } catch (e) {
+                $('start-btn').disabled = false; 
+                $('start-btn').querySelector('span').textContent = 'GAME START ▶';
+                showModal(e.message || '오류가 발생했습니다.');
+            }
+        }
+
+        async function loadWordsAndStart() {
+            const cacheKey = `${CONFIG.seasonId}_w${gameState.week}_v1`;
+            let words = JSON.parse(localStorage.getItem(cacheKey));
+            if (!words) {
+                const doc = await db.collection('seasons').doc(CONFIG.seasonId).get();
+                if (doc.exists) { words = doc.data()[`Week ${gameState.week}`] || []; localStorage.setItem(cacheKey, JSON.stringify(words)); }
+            }
+            if (!words || words.length === 0) return showModal('문제지를 못 가져왔어요.\n인터넷을 확인해주세요.');
+            
+            // 기록
+            const user = auth.currentUser;
+            const today = new Date().toISOString().split("T")[0];
+            const attDoc = db.collection(CONFIG.attemptCol).doc(user.uid);
+            await db.runTransaction(async t => {
+                const doc = await t.get(attDoc);
+                if (!doc.exists || doc.data().date !== today) t.set(attDoc, { uid: user.uid, date: today, count: 1, hasSharedToday: false });
+                else t.update(attDoc, { count: (doc.data().count || 0) + 1 });
+            });
+
+            gameState.words = words.sort(() => Math.random() - 0.5);
+            gameState.currentIndex = 0; gameState.score = 0; gameState.timeLeft = CONFIG.initTime; gameState.isPlayable = true;
+            updateUI(); showScreen('game-screen'); startGameLoop(); renderQuestion();
+        }
+
+        function startGameLoop() {
+            if (gameState.timerId) clearInterval(gameState.timerId);
+            gameState.timerId = setInterval(() => {
+                gameState.timeLeft -= 0.1;
+                if (gameState.timeLeft <= 0) { gameState.timeLeft = 0; endGame(false); }
+                updateTimerUI();
+            }, 100);
+        }
+        function updateTimerUI() {
+            const displayTime = Math.ceil(gameState.timeLeft); $('timer-display').textContent = displayTime;
+            const pct = (gameState.timeLeft / CONFIG.initTime) * 100;
+            const bar = $('time-bar'); bar.style.width = `${Math.min(pct, 100)}%`;
+            if (gameState.timeLeft < 5) { bar.classList.remove('bg-lime-400', 'shadow-[0_0_10px_rgba(163,230,53,0.8)]'); bar.classList.add('bg-red-500', 'shadow-[0_0_10px_rgba(239,68,68,0.8)]'); $('timer-display').classList.add('text-red-500'); }
+            else { bar.classList.add('bg-lime-400', 'shadow-[0_0_10px_rgba(163,230,53,0.8)]'); bar.classList.remove('bg-red-500', 'shadow-[0_0_10px_rgba(239,68,68,0.8)]'); $('timer-display').classList.remove('text-red-500'); }
+        }
+        function updateUI() { $('score-display').textContent = gameState.score; }
+
+        function renderQuestion() {
+            if (gameState.currentIndex >= gameState.words.length) return endGame(true);
+            const wordData = gameState.words[gameState.currentIndex];
+            $('word-display').textContent = wordData['단어'];
+            const badge = $('freq-badge');
+            if (wordData['역대 기출'] && wordData['역대 기출'] !== "0") { badge.textContent = `🔥 수능 기출 ${wordData['역대 기출']}회`; badge.style.opacity = 1; }
+            else badge.style.opacity = 0;
+
+            const answers = [
+                { text: wordData['정답'], isCorrect: true }, { text: wordData['오답1'], isCorrect: false },
+                { text: wordData['오답2'], isCorrect: false }, { text: wordData['오답3'], isCorrect: false }
+            ].sort(() => Math.random() - 0.5);
+
+            const container = $('options-container'); container.innerHTML = '';
+            answers.forEach(ans => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn w-full py-4 rounded-xl text-lg break-keep leading-snug px-2';
+                btn.textContent = ans.text;
+                btn.onclick = (e) => { if(!gameState.isPlayable) return; e.target.blur(); handleAnswer(btn, ans.isCorrect); };
+                container.appendChild(btn);
+            });
+        }
+
+        function handleAnswer(btn, isCorrect) {
+            gameState.isPlayable = false;
+            if (isCorrect) {
+                gameState.score += 10; gameState.timeLeft = Math.min(gameState.timeLeft + CONFIG.bonusTime, CONFIG.maxTime);
+                btn.classList.add('correct'); updateUI();
+                setTimeout(() => { gameState.currentIndex++; gameState.isPlayable = true; renderQuestion(); }, 200);
+            } else {
+                btn.classList.add('wrong'); btn.disabled = true;
+                setTimeout(() => { gameState.currentIndex++; gameState.isPlayable = true; renderQuestion(); }, 500);
+            }
+        }
+
+        async function endGame(isClear = false) {
+            clearInterval(gameState.timerId); gameState.isPlayable = false;
+            $('final-score').textContent = gameState.score;
+            
+            const badge = $('result-badge');
+            let msg = "";
+            if(gameState.score >= 400) { badge.textContent = "Rank S (1등급)"; badge.className = "inline-block px-4 py-1 bg-lime-400 text-black rounded text-sm font-bold"; msg = "찢었다.. 1등급 확정! 👍"; }
+            else if(gameState.score >= 200) { badge.textContent = "Rank A (2등급)"; badge.className = "inline-block px-4 py-1 bg-white text-black rounded text-sm font-bold"; msg = "조금만 더 하면 1등급! 🔥"; }
+            else { badge.textContent = "Rank B (노력요망)"; badge.className = "inline-block px-4 py-1 bg-slate-600 text-white rounded text-sm font-bold"; msg = "단어 암기가 시급합니다! 💦"; }
+            
+            // 만점자 특수 처리
+            if(isClear) { msg = "🏆 전설의 만점자! 완벽합니다!"; badge.textContent = "GOD (만점)"; badge.className = "inline-block px-4 py-1 bg-yellow-400 text-black rounded text-sm font-bold animate-bounce"; }
+
+            showScreen('end-screen');
+
+            try {
+                const user = auth.currentUser;
+                const userRef = db.collection(CONFIG.userCol).doc(user.uid);
+                const weekKey = `week${gameState.week}`;
+                await db.runTransaction(async t => {
+                    const doc = await t.get(userRef);
+                    if (!doc.exists) {
+                        const initScores = {}; for(let i=1; i<=8; i++) initScores[`week${i}`] = {score:0, elapsedTime:0};
+                        initScores[weekKey] = {score: gameState.score, elapsedTime: Date.now()};
+                        t.set(userRef, { uid: user.uid, name: gameState.nickname, totalScore: gameState.score, weeklyScores: initScores, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    } else {
+                        const data = doc.data();
+                        const cur = data.weeklyScores?.[weekKey] || {score:-1};
+                        if (gameState.score > cur.score) {
+                            const newScores = {...data.weeklyScores, [weekKey]: {score: gameState.score, elapsedTime: Date.now()}};
+                            const newTotal = Object.values(newScores).reduce((sum, s) => sum + (s?.score||0), 0);
+                            t.update(userRef, { weeklyScores: newScores, totalScore: newTotal, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                        }
+                    }
+                });
+            } catch (e) { console.error("Score Save Error:", e); }
+        }
+
+        function loadLeaderboard(type) {
+            const list = $('ranking-list');
+            const btns = { weekly: $('rank-tab-weekly'), total: $('rank-tab-total') };
+            Object.values(btns).forEach(b => { b.classList.remove('text-lime-400', 'border-b-2', 'border-lime-400', 'bg-white/5'); b.classList.add('text-slate-500'); });
+            btns[type].classList.add('text-lime-400', 'border-b-2', 'border-lime-400', 'bg-white/5'); btns[type].classList.remove('text-slate-500');
+
+            let query = db.collection(CONFIG.userCol);
+            if (type === 'weekly') query = query.orderBy(`weeklyScores.week${gameState.week}.score`, 'desc');
+            else query = query.orderBy('totalScore', 'desc');
+
+            query.limit(30).onSnapshot(snap => {
+                list.innerHTML = '';
+                if (snap.empty) { list.innerHTML = '<p class="text-center text-slate-600 text-xs mt-10">아직 아무도 없어요.<br>1등을 차지하세요!</p>'; return; }
+                snap.forEach((doc, idx) => {
+                    const data = doc.data();
+                    const score = type === 'weekly' ? (data.weeklyScores?.[`week${gameState.week}`]?.score || 0) : data.totalScore;
+                    const isMe = data.name === gameState.nickname;
+                    
+                    let rankClass = "text-slate-400";
+                    if(idx===0) rankClass = "rank-1"; else if(idx===1) rankClass = "rank-2"; else if(idx===2) rankClass = "rank-3";
+
+                    const div = document.createElement('div');
+                    div.className = `rank-item flex justify-between items-center p-3 ${isMe ? 'my-record' : ''}`;
+                    div.innerHTML = `<div class="flex items-center gap-3 overflow-hidden"><span class="rank-badge w-6 text-center ${rankClass}">${idx+1}</span><span class="text-slate-200 font-bold text-sm truncate">${data.name}</span></div><span class="text-lime-400 font-black italic text-sm flex-shrink-0">${score}</span>`;
+                    list.appendChild(div);
+                });
+            });
+        }
+
+        async function shareKakao(forChance) {
+            if(!Kakao.isInitialized()) return showModal('카카오 키를 설정해주세요.');
+            try {
+                if (forChance) {
+                    const user = auth.currentUser;
+                    if(user) await db.collection(CONFIG.attemptCol).doc(user.uid).update({ hasSharedToday: true });
+                }
+                Kakao.Share.sendDefault({
+                    objectType: 'feed',
+                    content: {
+                        title: '수단비 챌린지 - 대치동 영단어',
+                        description: `나의 어휘력 랭킹은? 지금 도전하고 상품 받아가세요!`,
+                        imageUrl: 'https://cdn.imweb.me/upload/S20250512bc351e1543759/78f771da220ea.png', // 힙한 이미지로 교체 추천
+                        link: { mobileWebUrl: location.href, webUrl: location.href },
+                    },
+                    buttons: [{ title: '도전하기', link: { mobileWebUrl: location.href, webUrl: location.href } }]
+                });
+                if(forChance) {
+                    showModal('공유 완료! 재도전 기회 획득! 🔥');
+                    $('share-chance-btn').classList.add('hidden'); $('start-btn').classList.remove('hidden');
+                }
+            } catch(e) { console.error(e); showModal('공유 기능을 실행할 수 없습니다.'); }
+        }
+
+        async function submitEmail() {
+            const email = $('email-input').value; if(!email.includes('@')) return showModal('이메일 형식이 아닙니다.');
+            try { await db.collection(CONFIG.emailCol).doc(auth.currentUser.uid).set({ email, nickname: gameState.nickname, createdAt: new Date() }, { merge: true }); showModal('등록 완료! 당첨을 기대하세요.'); $('email-section').style.display = 'none'; }
+            catch(e) { showModal('등록 실패. 다시 시도해주세요.'); }
+        }
+
+        auth.onAuthStateChanged(user => { if (user) initApp(); else auth.signInAnonymously(); });
+    </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+match /databases/{database}/documents {
+
+// 1. 단어 데이터 (읽기 전용) - 누구나 볼 수 있음
+match /seasons/{document=**} {
+  allow read: if true;
+  allow write: if false; 
+}
+
+// 2. 유저 점수 (베타 & 정식 모두 허용)
+// 랭킹은 누구나 조회 가능, 내 점수는 나만 기록 가능
+match /users_beta/{userId} {
+  allow read: if true;
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+match /users_season2/{userId} {
+  allow read: if true;
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+
+// 3. 도전 횟수 기록 (내 기록만 읽고 쓰기 가능)
+match /attempts_beta/{userId} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+match /attempts_season2/{userId} {
+  allow read, write: if request.auth != null && request.auth.uid == userId;
+}
+
+// 4. 이메일 수집 (쓰기만 가능)
+match /emails_beta/{userId} {
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+match /emails_season2/{userId} {
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+
+
+}
+}
