@@ -1,40 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
-match /databases/{database}/documents {
+  match /databases/{database}/documents {
+    
+    // 👇 1. 버전 관리용 (이게 없어서 오류가 난 거예요!)
+    match /system/config {
+      allow read: if true;
+      allow write: if false;
+    }
 
-// 1. 단어 데이터 (읽기 전용) - 누구나 볼 수 있음
-match /seasons/{document=**} {
-  allow read: if true;
-  allow write: if false; 
-}
+    // 👇 2. 사용자 데이터 (베타 & 정식 시즌2 모두 허용)
+    match /users_beta/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    match /users_season2/{userId} {
+      allow read, write: if request.auth != null;
+    }
 
-// 2. 유저 점수 (베타 & 정식 모두 허용)
-// 랭킹은 누구나 조회 가능, 내 점수는 나만 기록 가능
-match /users_beta/{userId} {
-  allow read: if true;
-  allow write: if request.auth != null && request.auth.uid == userId;
-}
-match /users_season2/{userId} {
-  allow read: if true;
-  allow write: if request.auth != null && request.auth.uid == userId;
-}
-
-// 3. 도전 횟수 기록 (내 기록만 읽고 쓰기 가능)
-match /attempts_beta/{userId} {
-  allow read, write: if request.auth != null && request.auth.uid == userId;
-}
-match /attempts_season2/{userId} {
-  allow read, write: if request.auth != null && request.auth.uid == userId;
-}
-
-// 4. 이메일 수집 (쓰기만 가능)
-match /emails_beta/{userId} {
-  allow write: if request.auth != null && request.auth.uid == userId;
-}
-match /emails_season2/{userId} {
-  allow write: if request.auth != null && request.auth.uid == userId;
-}
-
-
-}
+    // 👇 3. 횟수 제한 & 이메일
+    match /attempts_beta/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    match /attempts_season2/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    match /emails_beta/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    match /emails_season2/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // 👇 4. 시즌 단어 데이터 (읽기 전용)
+    match /seasons/{seasonId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
 }
