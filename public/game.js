@@ -2,7 +2,7 @@
 const KAKAO_KEY = "3b220ecf82039d6604c6a42308e4dd1a"; 
 
 // 🔄 [설정] 현재 클라이언트 버전 (Firestore 'system/config' 값과 일치시켜야 함)
-const CURRENT_CLIENT_VERSION = "1.3"; 
+const CURRENT_CLIENT_VERSION = "1.4"; 
 
 // 📅 일정 설정 (2026년 2월 2일 월요일 00:00:00 정식 오픈)
 const OFFICIAL_OPEN_DATE = new Date('2026-02-02T00:00:00+09:00'); 
@@ -16,7 +16,7 @@ const CONFIG = {
     startDate: '2026-02-02T00:00:00+09:00', 
     maxTime: 600, 
     initTime: 30, 
-    bonusTime: 2.4 // ⚡️ [설정] 2.4초 보너스 (콤보 없이 고정)
+    bonusTime: 2.4 // ⚡️ [설정] 2.4초 보너스
 };
 
 // 전역 변수
@@ -30,7 +30,8 @@ let gameState = {
     nickname: localStorage.getItem('sudanbi_nickname') || '', 
     week: 1, 
     isPlayable: true,
-    startTime: 0 // 🕒 타임어택 시작 시간
+    startTime: 0,
+    deviceId: null
 };
 let unsubscribeRanking = null; 
 let isAppInitialized = false; 
@@ -40,8 +41,14 @@ const $ = (id) => document.getElementById(id);
 const showScreen = (id) => { 
     document.querySelectorAll('.screen').forEach(el => el.classList.remove('active')); 
     $(id).classList.add('active'); 
-    if(id === 'screen-lobby') $('main-header').style.display = 'block';
-    else $('main-header').style.display = 'none';
+    
+    // 로비로 올 때마다 헤더 보이고 & 유저 상태 체크(버튼 갱신) 실행
+    if(id === 'screen-lobby') {
+        $('main-header').style.display = 'block';
+        checkUserStatus(); // 👈 [핵심] 로비 오면 즉시 버튼 상태 확인!
+    } else {
+        $('main-header').style.display = 'none';
+    }
 };
 
 const showModal = (msg) => { 
@@ -68,7 +75,7 @@ async function initApp() {
     db = firebase.firestore();
     auth = firebase.auth();
 
-    // 🔄 버전 체크 및 강제 업데이트
+    // 🔄 버전 체크
     db.collection('system').doc('config').onSnapshot((doc) => {
         if (doc.exists) {
             const serverVersion = doc.data().version;
@@ -96,12 +103,125 @@ async function initApp() {
     loadLeaderboard('weekly');
 
     $('btn-start').onclick = tryStartGame;
-    $('btn-share-revive').onclick = () => shareKakao(true);
+    // 👇 [수정] 로비의 공유 버튼도 기회 획득 기능(true) 켜기
+    $('btn-share-revive').onclick = () => shareKakao(true); 
     $('tab-weekly').onclick = () => loadLeaderboard('weekly');
     $('tab-total').onclick = () => loadLeaderboard('total');
     $('btn-submit-email').onclick = submitEmail;
-    $('btn-share').onclick = () => shareKakao(false);
-    $('btn-retry').onclick = () => location.reload();
+    // 👇 [수정] 결과 화면 공유 버튼도 기회 획득 기능(true) 켜기
+    $('btn-share').onclick = () => shareKakao(true); 
+    
+    // 다시 하기 버튼: 그냥 새로고침 대신 로비로 이동하면서 상태 체크
+    $('btn-retry').onclick = () => {
+        showScreen('screen-lobby');
+        loadLeaderboard('weekly');
+    };
+
+    // 최초 실행 시에도 상태 체크
+    checkUserStatus();
+}
+
+// 🚦 [신규] 유저 상태(기회)를 체크해서 버튼 모양 결정
+async function checkUserStatus() {
+    // 오픈 전이면 카운트다운 로직이 지배함
+    if (new Date() < OFFICIAL_OPEN_DATE) {
+        checkOpenStatus();
+        return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const btnStart = $('btn-start');
+    const btnRevive = $('btn-share-revive');
+    const today = new Date().toISOString().split("T")[0];
+    
+    try {
+        const doc = await db.collection(CONFIG.attemptCol).doc(user.uid).get();
+        
+        // 기록이 없거나 날짜가 다르면 -> 새출발 (Start 버튼 활성)
+        if (!doc.exists || doc.data().date !== today) {
+            showStartButton();
+            return;
+        }
+
+        const d = doc.data();
+
+        // 1. 기회를 다 쓴 경우 (2판 이상)
+        if (d.count >= 2) {
+            btnStart.classList.remove('hidden');
+            btnRevive.classList.add('hidden');
+            
+            btnStart.innerHTML = '<span class="relative z-10">내일 다시 도전!</span>';
+            btnStart.disabled = true; 
+            btnStart.classList.add('bg-slate-400', 'shadow-none', 'cursor-not-allowed'); 
+            btnStart.classList.remove('hover:scale-[1.02]', 'active:scale-95', 'bg-blue-600', 'hover:bg-blue-500'); 
+        }
+        // 2. 1판 했고 아직 공유 안 한 경우 -> 공유 버튼 보여주기!
+        else if (d.count >= 1 && !d.hasSharedToday) {
+            btnStart.classList.add('hidden'); // 시작 버튼 숨김
+            btnRevive.classList.remove('hidden'); // 공유 버튼 등판
+        }
+        // 3. 그 외 (1판 했지만 공유했음 = 2판째 가능) -> 시작 버튼 활성
+        else {
+            showStartButton();
+        }
+    } catch(e) { console.error(e); }
+}
+
+function showStartButton() {
+    const btn = $('btn-start');
+    $('btn-share-revive').classList.add('hidden');
+    btn.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<span class="relative z-10">GAME START</span>';
+    btn.classList.remove('bg-slate-400', 'shadow-none', 'cursor-not-allowed'); 
+    btn.classList.add('bg-blue-600', 'hover:bg-blue-500'); 
+}
+
+// ⏳ 오픈 카운트다운
+function checkOpenStatus() {
+    const now = new Date();
+    const diff = OFFICIAL_OPEN_DATE - now;
+    const btn = $('btn-start');
+    
+    // 로비가 아닐 땐 굳이 실행 안 함
+    if (!$('screen-lobby').classList.contains('active')) return;
+
+    if (diff > 0) {
+        $('btn-share-revive').classList.add('hidden'); // 오픈 전엔 공유버튼 숨김
+        btn.classList.remove('hidden');
+
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / (1000 * 60)) % 60);
+        const s = Math.floor((diff / 1000) % 60);
+
+        const hStr = String(h).padStart(2, '0');
+        const mStr = String(m).padStart(2, '0');
+        const sStr = String(s).padStart(2, '0');
+
+        btn.disabled = true;
+        btn.classList.remove('bg-blue-600', 'hover:bg-blue-500', 'shadow-blue-200', 'hover:scale-[1.02]', 'active:scale-95');
+        btn.classList.add('bg-slate-800', 'cursor-not-allowed', 'shadow-none', 'border', 'border-slate-700');
+        
+        btn.innerHTML = `
+            <div class="flex flex-col items-center leading-none py-1">
+                <span class="text-[10px] font-bold text-yellow-400 mb-2 tracking-[0.3em] uppercase animate-pulse">Coming Soon</span>
+                <span class="text-xl sm:text-2xl font-black text-white tabular-nums tracking-tight">
+                    <span class="text-slate-500 mr-2">D-${d}</span>${hStr}:${mStr}:${sStr}
+                </span>
+            </div>
+        `;
+        setTimeout(checkOpenStatus, 1000);
+    } else {
+        // 시간이 됐으면 유저 상태 다시 체크해서 버튼 복구
+        checkUserStatus();
+        
+        const banner = $('season-banner');
+        banner.textContent = "🏆 수단비 단어 챌린지 S2";
+        banner.className = "w-full text-center py-2 text-[10px] font-black tracking-widest uppercase bg-slate-900 text-white";
+    }
 }
 
 function initSeasonInfo() {
@@ -119,8 +239,13 @@ function initSeasonInfo() {
     $('season-date').textContent = `${weekStart.getMonth()+1}.${weekStart.getDate()} ~ ${weekEnd.getMonth()+1}.${weekEnd.getDate()}`;
 
     const banner = $('season-banner');
-    if (isBeta) {
-        banner.textContent = "🚧 프리시즌(BETA) : 기록은 2/2 초기화";
+    const diff = OFFICIAL_OPEN_DATE - now;
+
+    if (diff > 0) {
+        banner.textContent = "🔒 2월 2일 정식 오픈 예정";
+        banner.className = "w-full text-center py-2 text-[10px] font-black tracking-widest uppercase bg-slate-700 text-slate-300 shadow-sm";
+    } else if (isBeta) {
+        banner.textContent = "🚧 프리시즌(BETA)";
         banner.className = "w-full text-center py-2 text-[10px] font-black tracking-widest uppercase bg-yellow-400 text-slate-900 shadow-sm";
     } else {
         banner.textContent = "🏆 수단비 단어 챌린지 S2";
@@ -128,8 +253,11 @@ function initSeasonInfo() {
     }
 }
 
-// --- 게임 시작 ---
 async function tryStartGame() {
+    if (new Date() < OFFICIAL_OPEN_DATE) {
+        return showModal('2월 2일 00시에\n정식 오픈됩니다! 🙇‍♂️');
+    }
+
     const nickname = $('nickname-input').value.trim();
     if (nickname.length < 2) return showModal('닉네임을\n2자 이상 입력해주세요.');
 
@@ -141,13 +269,34 @@ async function tryStartGame() {
     try {
         if (unsubscribeRanking) { unsubscribeRanking(); unsubscribeRanking = null; }
 
-        if (!gameState.nickname) {
-            const snap = await db.collection(CONFIG.userCol).where('name', '==', nickname).get();
-            if (!snap.empty) throw new Error('이미 사용 중인 이름입니다.');
-            localStorage.setItem('sudanbi_nickname', nickname);
-            gameState.nickname = nickname;
+        if (typeof FingerprintJS !== 'undefined') {
+            const fpPromise = FingerprintJS.load();
+            const fp = await fpPromise;
+            const result = await fp.get();
+            gameState.deviceId = result.visitorId;
+
+            if (!gameState.nickname) {
+                const nameSnap = await db.collection(CONFIG.userCol).where('name', '==', nickname).get();
+                if (!nameSnap.empty && nameSnap.docs[0].data().uid !== auth.currentUser.uid) {
+                    throw new Error('이미 사용 중인 이름입니다.');
+                }
+                const deviceSnap = await db.collection(CONFIG.userCol).where('deviceId', '==', gameState.deviceId).get();
+                if (deviceSnap.size >= 3) {
+                    throw new Error('한 기기에서 생성 가능한\n닉네임 수(3개)를 초과했습니다.');
+                }
+                localStorage.setItem('sudanbi_nickname', nickname);
+                gameState.nickname = nickname;
+            }
+        } else {
+             if (!gameState.nickname) {
+                const nameSnap = await db.collection(CONFIG.userCol).where('name', '==', nickname).get();
+                if (!nameSnap.empty && nameSnap.docs[0].data().uid !== auth.currentUser.uid) throw new Error('이미 사용 중인 이름입니다.');
+                localStorage.setItem('sudanbi_nickname', nickname);
+                gameState.nickname = nickname;
+             }
         }
 
+        // 여기서도 한 번 더 체크 (보안상 이중 체크)
         const user = auth.currentUser;
         const today = new Date().toISOString().split("T")[0];
         const doc = await db.collection(CONFIG.attemptCol).doc(user.uid).get();
@@ -155,21 +304,14 @@ async function tryStartGame() {
 
         if (doc.exists && doc.data().date === today) {
             const d = doc.data();
-            if (d.count >= 2) { 
-                canPlay = false; 
-                btn.innerHTML = '<span class="relative z-10">내일 다시 도전!</span>';
-                btn.disabled = true; 
-                btn.classList.add('bg-slate-400', 'shadow-none', 'cursor-not-allowed'); 
-                btn.classList.remove('hover:scale-[1.02]', 'active:scale-95', 'bg-blue-600', 'hover:bg-blue-500'); 
-                showModal('오늘의 기회를 다 썼어요!\n내일 다시 도전하세요.'); 
-                return; 
-            }
+            if (d.count >= 2) canPlay = false;
             if (d.count >= 1 && !d.hasSharedToday) canPlay = false;
 
             if (!canPlay) {
-                btn.classList.add('hidden'); btn.disabled = false; btn.innerHTML = originalText;
-                $('btn-share-revive').classList.remove('hidden');
-                return showModal('기회 소진! 😱\n공유하면 한 번 더 할 수 있어요!');
+                // UI 갱신 후 알림
+                checkUserStatus();
+                if (d.count >= 2) return showModal('오늘의 기회를 다 썼어요!\n내일 다시 도전하세요.');
+                return showModal('기회 소진! 😱\n공유하고 한 번 더 도전하세요!');
             }
         }
         await loadWordsAndStart();
@@ -212,7 +354,7 @@ async function loadWordsAndStart() {
     gameState.score = 0; 
     gameState.timeLeft = CONFIG.initTime; 
     gameState.isPlayable = true;
-    gameState.startTime = Date.now(); // 🕒 시작 시간 기록
+    gameState.startTime = Date.now();
 
     updateScoreUI();
     showScreen('screen-game');
@@ -250,7 +392,6 @@ function renderQuestion() {
     if (gameState.currentIndex >= gameState.words.length) return endGame(true);
     
     const wordData = gameState.words[gameState.currentIndex];
-    
     const wordEl = $('word-display');
     wordEl.classList.remove('animate-pop-in');
     void wordEl.offsetWidth; 
@@ -287,7 +428,6 @@ function handleAnswer(btn, isCorrect) {
 
     if (isCorrect) {
         gameState.score += 10; 
-        // ⚡️ [2.4초 보너스] 콤보 로직 제거하고 단순 적용
         gameState.timeLeft = Math.min(gameState.timeLeft + CONFIG.bonusTime, CONFIG.maxTime);
         btn.classList.add('correct'); 
         updateScoreUI();
@@ -318,32 +458,32 @@ async function endGame(isClear = false) {
         
         await db.runTransaction(async t => {
             const doc = await t.get(userRef);
-            // playTime 저장
-            const newRecord = { score: gameState.score, playTime: playTimeSec, createdAt: Date.now() };
+            const newRecord = { 
+                score: gameState.score, 
+                playTime: playTimeSec, 
+                createdAt: Date.now() 
+            };
 
             if (!doc.exists) {
                 const initScores = {}; for(let i=1; i<=8; i++) initScores[`week${i}`] = {score:0, playTime:0};
                 initScores[weekKey] = newRecord;
                 t.set(userRef, { 
                     uid: user.uid, name: gameState.nickname, 
+                    deviceId: gameState.deviceId || 'unknown',
                     totalScore: gameState.score, totalPlayTime: playTimeSec,
                     weeklyScores: initScores, updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
                 });
             } else {
                 const data = doc.data();
                 const cur = data.weeklyScores?.[weekKey] || {score: -1};
-                
-                // 🏆 [갱신 조건] 1.점수 높음 OR 2.점수 같고 시간 짧음 OR 3.기존기록 시간정보 없음
                 const curPlayTime = cur.playTime !== undefined ? cur.playTime : 99999;
                 
                 if (gameState.score > cur.score || (gameState.score === cur.score && playTimeSec < curPlayTime)) {
                     const newScores = {...data.weeklyScores, [weekKey]: newRecord};
-                    
                     let newTotalScore = 0; let newTotalTime = 0;
                     Object.values(newScores).forEach(s => {
                         if (s && s.score) { newTotalScore += s.score; newTotalTime += (s.playTime || 0); }
                     });
-
                     t.update(userRef, { 
                         weeklyScores: newScores, totalScore: newTotalScore, totalPlayTime: newTotalTime,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
@@ -369,7 +509,6 @@ function loadLeaderboard(type) {
 
     let query = db.collection(CONFIG.userCol);
     if (type === 'weekly') {
-        // [주의] Firestore 색인이 없거나, 기존 데이터에 playTime 필드가 없으면 결과가 안 나옴!
         query = query.orderBy(`weeklyScores.week${gameState.week}.score`, 'desc')
                      .orderBy(`weeklyScores.week${gameState.week}.playTime`, 'asc');
     } else {
@@ -380,16 +519,14 @@ function loadLeaderboard(type) {
         list.innerHTML = '';
         if (snap.empty) { list.innerHTML = '<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400"><p class="text-xs font-medium">아직 기록이 없습니다<br>1등의 주인공이 되어보세요!</p></div>'; return; }
         
-        snap.forEach((doc, idx) => {
+        snap.docs.forEach((doc, idx) => {
             const data = doc.data();
             const weekData = data.weeklyScores?.[`week${gameState.week}`];
             
-            // 🛡️ [안전장치] 값이 없으면 0으로 표시
             const score = type === 'weekly' ? (weekData?.score || 0) : (data.totalScore || 0);
             const timeValue = type === 'weekly' ? weekData?.playTime : data.totalPlayTime;
 
             let timeHtml = '';
-            // playTime이 있는 경우에만 표시
             if (timeValue !== undefined) {
                 const sec = timeValue;
                 const min = Math.floor(sec / 60);
@@ -404,9 +541,9 @@ function loadLeaderboard(type) {
 
             const isMe = data.name === gameState.nickname;
             let rankClass = "text-slate-400 font-bold";
-            if(idx===0) rankClass = "rank-1 font-black text-lg"; 
-            else if(idx===1) rankClass = "rank-2 font-black"; 
-            else if(idx===2) rankClass = "rank-3 font-black";
+            if(idx===0) rankClass = "rank-1 font-black text-lg text-yellow-500 drop-shadow-sm"; 
+            else if(idx===1) rankClass = "rank-2 font-black text-slate-500"; 
+            else if(idx===2) rankClass = "rank-3 font-black text-amber-700";
 
             const div = document.createElement('div');
             div.className = `rank-item flex justify-between items-center p-3 px-4 ${isMe ? 'my-record' : ''}`;
@@ -426,13 +563,18 @@ function loadLeaderboard(type) {
     });
 }
 
+// 👇 [수정] 공유하기 기능 (부활 로직 통합)
 async function shareKakao(forChance) {
     if(!Kakao.isInitialized()) return showModal('카카오 키 오류!\n도메인을 확인해주세요.');
     try {
-        if (forChance) {
-            const user = auth.currentUser;
-            if(user) await db.collection(CONFIG.attemptCol).doc(user.uid).update({ hasSharedToday: true });
+        const user = auth.currentUser;
+        if(user) {
+             await db.collection(CONFIG.attemptCol).doc(user.uid).set(
+                 { hasSharedToday: true }, 
+                 { merge: true }
+             );
         }
+
         Kakao.Share.sendDefault({
             objectType: 'feed',
             content: {
@@ -445,11 +587,16 @@ async function shareKakao(forChance) {
         });
         
         if(forChance) {
-            showModal('공유 완료! 기회 획득! ⚡');
-            $('btn-share-revive').classList.add('hidden'); 
-            const btn = $('btn-start');
-            btn.classList.remove('hidden'); btn.disabled = false;
-            btn.innerHTML = '<span class="relative z-10">GAME START</span>';
+            // 로비에 있는 '부활 버튼' 즉시 숨기고 상태 갱신
+            checkUserStatus(); // 로비 버튼 상태 새로고침
+
+            // 만약 결과 화면이라면 알림만 띄움
+            if ($('screen-result').classList.contains('active')) {
+                showModal('기회 획득 완료! ⚡\n[다시 하기]를 눌러 도전하세요!');
+            } else {
+                // 로비라면 즉시 시작 버튼이 보일 테니 알림
+                showModal('공유 완료! 기회 획득! ⚡');
+            }
         }
     } catch(e) { console.error(e); showModal('공유 실패: ' + e.message); }
 }
